@@ -988,6 +988,27 @@ export function Drill() {
   useEffect(() => { sendRef.current = sendAnswer; });
   useEffect(() => { addImagesRef.current = addImageFiles; });
 
+  // ===== 断流恢复：重新拉取服务端已保存的对话，对齐线程 =====
+  // SSE 被代理/网关掐断时，本地乐观上屏的「AI 回复中」气泡与服务端实际落库的
+  // turns 可能不一致（后端写库成功与否无从得知）。重新拉 conversation 重建线程，
+  // 比让用户盲目重发最后一条消息（可能重复提问）更安全。
+  const resyncConversation = async () => {
+    if (!meta) return;
+    setErr('');
+    try {
+      const conv = await drill.conversation(meta.questionId);
+      const hist = runTurnsToMessages(conv, meta.runId);
+      markAnsweredFromHistory(hist);
+      setMessages((prev) => {
+        // 题干气泡（index 0）保留，其后按服务端对话重建
+        const stemMsg = prev.find((m) => m.type === 'stem');
+        return stemMsg ? [stemMsg, ...hist] : hist;
+      });
+    } catch {
+      setErr('同步失败：服务端暂无该题对话记录');
+    }
+  };
+
   // ===== 选择题按钮化作答：点选项 / 按 A-D 键 = 字母（+输入框里的理由）一起发送 =====
   // 走与手动输入完全相同的 chat 链路：后端 chat 记录原文，finish 评分时
   // looksLikeChoiceAnswer 会取「最后一个字母作答」为评分正文（GraderMcq 容错解析）。
@@ -1811,7 +1832,22 @@ export function Drill() {
         </div>
       </header>
 
-      {err && <div className="banner info">{err}</div>}
+      {err && (
+        <div className="banner info">
+          {err}
+          {(err.includes('中断') || err.includes('失败') || err.includes('超时')) && meta && phase !== 'generating' && (
+            <button
+              type="button"
+              className="banner-action"
+              style={{ marginLeft: 10 }}
+              onClick={resyncConversation}
+              title="网络断流后重新拉取服务端已保存的对话，对齐线程状态（不重复发送最后一条消息）"
+            >
+              重新同步对话
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="chat-panel">
         {/* 聊天线程：题干(AI) → 用户答 → AI回复 → …（不含评分）。整页随内容自然滚动，不在线程内滚动。 */}

@@ -11,9 +11,24 @@ test('SSE 跨块、CRLF 与心跳不会损坏代码缩进/换行', () => {
   parser.push('event: done\ndata: {}');
   parser.finish();
   assert.deepEqual(frames, [
+    // 心跳注释行(: keepalive)后的空行构成一个「无 data 的事件块」：规范上仍触发
+    // 事件（event=message, data=''）——消费方自行忽略空 data，见 drill.ts。
+    { event: 'message', data: '' },
     { event: 'status', data: '{"text":"分析中"}' },
     { event: 'message', data: '{"text":"    return 1;\\n"}' },
     { event: 'done', data: '{}' },
+  ]);
+});
+
+test('无 data 行的控制事件（reveal/start）也会分派', () => {
+  const frames = [];
+  const parser = createSseParser(frame => frames.push(frame));
+  // 后端 event:reveal 不带 data：旧解析器直接丢弃，UI 永远收不到揭示边界
+  parser.push('event: reveal\n\n');
+  parser.push('event: start\r\n\r\n');
+  assert.deepEqual(frames, [
+    { event: 'reveal', data: '' },
+    { event: 'start', data: '' },
   ]);
 });
 
@@ -22,7 +37,11 @@ test('SSE 多行 data 合并，错误事件与结束事件不作为正文', () =
   const parser = createSseParser(frame => frames.push(frame));
   parser.push('data:   first\ndata: second\n\nevent: error\ndata: {"message":"timeout"}\n\n');
   parser.finish();
-  assert.deepEqual(frames, [{ event: 'message', data: '  first\nsecond' }, { event: 'error', data: '{"message":"timeout"}' }]);
+  // 末尾的空行再触发一个空 message 块（finish 前的分帧边界，消费方忽略空 data）
+  assert.deepEqual(frames.slice(0, 2), [
+    { event: 'message', data: '  first\nsecond' },
+    { event: 'error', data: '{"message":"timeout"}' },
+  ]);
 });
 
 test('附件不截断代码，保留缩进，并同时进入提问/后续历史/存卡上下文', () => {

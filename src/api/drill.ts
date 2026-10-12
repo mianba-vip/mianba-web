@@ -1,5 +1,6 @@
-import { apiFetch, ApiError, getToken, getLlmKeyHeader } from './client';
+import { apiFetch, ApiError, getToken, getLlmKeyHeader, clearSession } from './client';
 import { notifyDataChanged } from './dataEvents';
+import { createSseParser } from '../lib/sseParser';
 import type {
   QuestionView,
   QuestionMeta,
@@ -61,11 +62,22 @@ interface SseHandlers {
 const API_BASE_SSE: string = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 
 /**
+ * 空闲看门狗：SSE 超过该时长没有任何字节到达（连接被代理/网关静默掐断，
+ * fetch 的 read 会永远挂起）→ 主动中止并报错，让 UI 能给出「恢复对话」入口。
+ * 后端 SseStream 每 10s 发一次心跳，正常流（含推理模型长时间思考）不会触雷。
+ */
+const SSE_IDLE_TIMEOUT_MS = 90_000;
+
+/**
  * 打开一条 SSE：fetch 后逐行解析 SSE，按事件类型分派回调。
  * - event: grade   → onGrade（仅 POST /submit 下发，含完整 GradeView）
- * - 默认 message / 纯 data → onToken（讲解 token）
+ * - 默认 message / 纯 data → onToken（讲解 token；空 data 的心跳块忽略）
  * - event: done    → onDone（fullText 兜底覆盖，修复偶发末尾截断）
  * - 非 2xx / 流式中止 → onError（带 status+message，前端据此区分 409 闸门等）
+ * - 401 → 清会话并广播 yan:logout（与 apiFetch / knowledge.ask 同一语义）
+ *
+ * 帧解析统一走 lib/sseParser.ts（与 knowledge.ts 同一实现，有测试覆盖），
+ * 这里只负责事件分派；按行让出事件循环，保证逐 token 独立渲染。
  */
 function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorStream {
   const requestToken = getToken();
@@ -80,6 +92,16 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
         ...(llmKey ? { 'X-LLM-Key': llmKey } : {}),
       };
       const res = await fetch(url, { ...init, headers, signal: controller.signal });
+      if (res.status === 401) {
+        // 会话过期（token 被顶/过期后仍残留本地）：清会话 + 广播登出，
+        // 与 apiFetch 的 401 处理同一语义；避免用户困在「思考中…」假死界面
+        if (requestToken === getToken()) {
+          clearSession();
+          window.dispatchEvent(new Event('yan:logout'));
+        }
+        handlers.onError(401, '登录已失效，请重新登录');
+        return;
+      }
       if (!res.ok || !res.body) {
         let msg = '';
         try { msg = await res.text(); } catch { /* ignore */ }
@@ -89,12 +111,22 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
-      let currentEvent: string | null = null;
-      const currentData: string[] = [];
       let finished = false;
 
-      const dispatchEvent = () => {
-        const payload = currentData.join('\n');
+      // 空闲看门狗：任何字节到达即重置；触发时中止流并回调明确错误
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
+      const armIdle = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          controller.abort();
+        }, SSE_IDLE_TIMEOUT_MS);
+      };
+      const disarmIdle = () => {
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      };
+      armIdle();
+
+      const dispatchEvent = (currentEvent: string, payload: string) => {
         if (currentEvent === 'meta') {
           if (handlers.onMeta) {
             try { handlers.onMeta(JSON.parse(payload) as QuestionMeta); } catch { /* ignore */ }
@@ -148,7 +180,8 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
           }
           handlers.onDone(fullText);
           reader.cancel().catch(() => {});
-        } else if (currentEvent == null || currentEvent === 'message') {
+        } else if (currentEvent === 'message') {
+          // 空数据块（心跳注释行后的空行）不是 token，忽略
           if (payload && payload !== '[DONE]') {
             try {
               const parsed = JSON.parse(payload);
@@ -160,22 +193,22 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
             }
           }
         }
-        currentEvent = null;
-        currentData.length = 0;
+        // start 等其它控制事件：不进正文
       };
 
-      const handleLine = (line: string) => {
-        if (line === '') dispatchEvent();
-        else if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
-        else if (line.startsWith('data:')) currentData.push(line.slice(5).trim());
-      };
+      // 帧解析统一走 lib/sseParser（与 knowledge.ts 同一实现）
+      const parser = createSseParser(({ event, data }) => {
+        if (finished || cancelled) return;
+        dispatchEvent(event, data);
+      });
 
       const processBuf = async () => {
         let idx: number;
         while ((idx = buf.indexOf('\n')) >= 0) {
-          const line = buf.slice(0, idx).trim();
+          const line = buf.slice(0, idx);
           buf = buf.slice(idx + 1);
-          handleLine(line);
+          // 按行喂给共享解析器（保留逐 token 让出事件循环的渲染节奏）
+          parser.push(line + '\n');
           if (finished || cancelled) return;
           await new Promise((r) => setTimeout(r, 0)); // 让出事件循环，确保每 token 独立渲染
         }
@@ -185,19 +218,22 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
         const { done, value } = await reader.read();
         if (done || cancelled) {
           if (!finished && !cancelled) {
-            buf += decoder.decode();
-            await processBuf();
-            if (!finished && !cancelled) {
-              const tail = buf.trim();
-              if (tail) handleLine(tail);
-              if (!finished) dispatchEvent();
-            }
+            parser.push(buf);
+            parser.push(decoder.decode());
+            parser.finish();
           }
           break;
         }
+        armIdle();
         buf += decoder.decode(value, { stream: true });
         await processBuf();
-        if (finished || cancelled) return;
+        if (finished || cancelled) { disarmIdle(); return; }
+      }
+      disarmIdle();
+      if (!finished && !cancelled) {
+        // 流被对端中途掐断（代理超时/网络闪断）：明确报错而非静默；
+        // UI 据此给出「重新同步对话」入口（重拉 drill.conversation 对齐服务端状态）
+        handlers.onError(undefined, '连接已中断（网络闪断或服务超时）');
       }
     } catch {
       if (!cancelled) handlers.onError();

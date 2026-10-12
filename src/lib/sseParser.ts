@@ -6,7 +6,9 @@ export function createSseParser(onEvent: (event: SseEvent) => void) {
   let event = 'message';
   let data: string[] = [];
   const dispatch = () => {
-    if (data.length) onEvent({ event, data: data.join('\n') });
+    // 无 data 行的事件块也分派（SSE 规范：只有 event: 字段的块同样触发事件）。
+    // 后端 event:reveal / event:start 等控制事件可能不带 data，丢弃会导致 UI 永远收不到。
+    onEvent({ event, data: data.join('\n') });
     event = 'message';
     data = [];
   };
