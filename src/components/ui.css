@@ -151,3 +151,27 @@
     transform: rotate(360deg);
   }
 }
+
+/* 路由级 lazy 页面的加载占位（App.tsx PageLoading） */
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+}
+.page-loading .spinner {
+  width: 22px;
+  height: 22px;
+}
+/* 冷门语言按需加载期间的纯文本代码块（Markdown.tsx） */
+.md-plain-code {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--ink) 6%, transparent);
+  border: 1px solid color-mix(in oklch, var(--ink) 12%, transparent);
+  font-family: var(--font-mono);
+  font-size: calc(0.85em * var(--scale-code, 1));
+  line-height: 1.6;
+  overflow-x: auto;
+}

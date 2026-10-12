@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { memo, useEffect, useId, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import { Check, Copy } from 'lucide-react';
@@ -6,9 +6,9 @@ import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './Markdown.css';
-// 常用语言显式注册：打包只带这些（不会把 refractor 297 种语言全部打成 chunk），
-// 且流式聊天中代码块首帧即可高亮，无需异步加载后再重绘。
-import go from 'react-syntax-highlighter/dist/esm/languages/prism/go';
+// 高频语言静态注册（进入主包，首帧即高亮——流式聊天代码块不需要等异步加载）；
+// 冷门语言走 LAZY_LANGUAGES 按需注册（独立小 chunk，首次出现该语言代码块时拉取），
+// 避免把 33 种语言全部打进主包。
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
 import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
@@ -18,46 +18,66 @@ import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
-import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown';
+import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
+import go from 'react-syntax-highlighter/dist/esm/languages/prism/go';
 import markup from 'react-syntax-highlighter/dist/esm/languages/prism/markup';
 import css from 'react-syntax-highlighter/dist/esm/languages/prism/css';
-import scss from 'react-syntax-highlighter/dist/esm/languages/prism/scss';
-import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
-import rust from 'react-syntax-highlighter/dist/esm/languages/prism/rust';
-import kotlin from 'react-syntax-highlighter/dist/esm/languages/prism/kotlin';
-import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
-import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
-import csharp from 'react-syntax-highlighter/dist/esm/languages/prism/csharp';
-import php from 'react-syntax-highlighter/dist/esm/languages/prism/php';
-import ruby from 'react-syntax-highlighter/dist/esm/languages/prism/ruby';
-import diff from 'react-syntax-highlighter/dist/esm/languages/prism/diff';
-import docker from 'react-syntax-highlighter/dist/esm/languages/prism/docker';
-import graphql from 'react-syntax-highlighter/dist/esm/languages/prism/graphql';
-import toml from 'react-syntax-highlighter/dist/esm/languages/prism/toml';
-import ini from 'react-syntax-highlighter/dist/esm/languages/prism/ini';
-import properties from 'react-syntax-highlighter/dist/esm/languages/prism/properties';
-import scala from 'react-syntax-highlighter/dist/esm/languages/prism/scala';
-import dart from 'react-syntax-highlighter/dist/esm/languages/prism/dart';
-import elixir from 'react-syntax-highlighter/dist/esm/languages/prism/elixir';
-import haskell from 'react-syntax-highlighter/dist/esm/languages/prism/haskell';
-import lua from 'react-syntax-highlighter/dist/esm/languages/prism/lua';
-import perl from 'react-syntax-highlighter/dist/esm/languages/prism/perl';
-import r from 'react-syntax-highlighter/dist/esm/languages/prism/r';
 
 const REGISTERED: [string, unknown][] = [
-  ['go', go], ['javascript', javascript], ['typescript', typescript],
+  ['javascript', javascript], ['typescript', typescript],
   ['jsx', jsx], ['tsx', tsx], ['python', python], ['bash', bash],
-  ['json', json], ['sql', sql], ['yaml', yaml], ['markdown', markdown],
-  ['markup', markup], ['css', css], ['scss', scss], ['java', java],
-  ['rust', rust], ['kotlin', kotlin], ['swift', swift], ['cpp', cpp],
-  ['csharp', csharp], ['php', php], ['ruby', ruby], ['diff', diff],
-  ['docker', docker], ['graphql', graphql], ['toml', toml], ['ini', ini],
-  ['properties', properties], ['scala', scala], ['dart', dart],
-  ['elixir', elixir], ['haskell', haskell], ['lua', lua], ['perl', perl],
-  ['r', r],
+  ['json', json], ['sql', sql], ['yaml', yaml], ['java', java],
+  ['go', go], ['markup', markup], ['css', css],
 ];
 for (const [name, lang] of REGISTERED) {
   SyntaxHighlighter.registerLanguage(name, lang as Parameters<typeof SyntaxHighlighter.registerLanguage>[1]);
+}
+
+// 冷门语言：首次遇到才动态 import 注册（各成独立小 chunk）。registered 标记
+// 去重；加载完成前该代码块以纯文本渲染（SyntaxHighlighter 未注册语言不报错），
+// LangReadyGate 里 bump 状态触发重渲染后恢复高亮。
+const LAZY_LANGUAGES: Record<string, () => Promise<{ default: unknown }>> = {
+  scss: () => import('react-syntax-highlighter/dist/esm/languages/prism/scss'),
+  rust: () => import('react-syntax-highlighter/dist/esm/languages/prism/rust'),
+  kotlin: () => import('react-syntax-highlighter/dist/esm/languages/prism/kotlin'),
+  swift: () => import('react-syntax-highlighter/dist/esm/languages/prism/swift'),
+  cpp: () => import('react-syntax-highlighter/dist/esm/languages/prism/cpp'),
+  csharp: () => import('react-syntax-highlighter/dist/esm/languages/prism/csharp'),
+  php: () => import('react-syntax-highlighter/dist/esm/languages/prism/php'),
+  ruby: () => import('react-syntax-highlighter/dist/esm/languages/prism/ruby'),
+  diff: () => import('react-syntax-highlighter/dist/esm/languages/prism/diff'),
+  docker: () => import('react-syntax-highlighter/dist/esm/languages/prism/docker'),
+  graphql: () => import('react-syntax-highlighter/dist/esm/languages/prism/graphql'),
+  markdown: () => import('react-syntax-highlighter/dist/esm/languages/prism/markdown'),
+  toml: () => import('react-syntax-highlighter/dist/esm/languages/prism/toml'),
+  ini: () => import('react-syntax-highlighter/dist/esm/languages/prism/ini'),
+  properties: () => import('react-syntax-highlighter/dist/esm/languages/prism/properties'),
+  scala: () => import('react-syntax-highlighter/dist/esm/languages/prism/scala'),
+  dart: () => import('react-syntax-highlighter/dist/esm/languages/prism/dart'),
+  elixir: () => import('react-syntax-highlighter/dist/esm/languages/prism/elixir'),
+  haskell: () => import('react-syntax-highlighter/dist/esm/languages/prism/haskell'),
+  lua: () => import('react-syntax-highlighter/dist/esm/languages/prism/lua'),
+  perl: () => import('react-syntax-highlighter/dist/esm/languages/prism/perl'),
+  r: () => import('react-syntax-highlighter/dist/esm/languages/prism/r'),
+};
+const lazyLangLoaded = new Set<string>();
+
+/** 冷门语言按需注册的守门组件：注册完成后重渲染一次，恢复语法高亮。 */
+function LangReadyGate({ lang, children }: { lang: string; children: React.ReactNode }) {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (lazyLangLoaded.has(lang)) return;
+    const loader = LAZY_LANGUAGES[lang];
+    if (!loader) return;
+    let active = true;
+    loader().then((mod) => {
+      SyntaxHighlighter.registerLanguage(lang, mod.default as Parameters<typeof SyntaxHighlighter.registerLanguage>[1]);
+      lazyLangLoaded.add(lang);
+      if (active) bump((n) => n + 1);
+    }).catch(() => { /* 拉取失败：保持纯文本渲染 */ });
+    return () => { active = false; };
+  }, [lang]);
+  return <>{children}</>;
 }
 
 // 安全渲染：react-markdown 默认不渲染原始 HTML（转义），配合下面不放行
@@ -299,35 +319,43 @@ const components: Components = {
       }
       const lang = (LANG_ALIAS[requestedLang] ?? requestedLang).toLowerCase();
       const label = LANG_LABEL[lang];
+      const needsLazy = !lazyLangLoaded.has(lang) && lang in LAZY_LANGUAGES;
       return (
         <div className="md-code-block">
           <CodeToolbar text={text} label={label ?? requestedLang} />
-          <SyntaxHighlighter
-            language={lang}
-            style={oneLight}
-            PreTag="div"
-            customStyle={{
-              margin: 0,
-              padding: 'var(--s-3) var(--s-4)',
-              borderRadius: 'var(--r-md)',
-              background: 'color-mix(in oklch, var(--ink) 6%, transparent)',
-              border: '1px solid color-mix(in oklch, var(--ink) 12%, transparent)',
-              fontSize: 'calc(0.85em * var(--scale-code, 1))',
-              lineHeight: 1.6,
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: 'var(--font-mono)',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                // 未命中 token 的裸文本继承正文色（--ink），避免染上 .md code 的朱砂红
-                color: 'inherit',
-              },
-            }}
-          >
-            {text}
-          </SyntaxHighlighter>
+          {/* 冷门语言首现时先纯文本渲染，LangReadyGate 注册后重渲染出高亮 */}
+          {needsLazy ? (
+            <LangReadyGate lang={lang}>
+              <pre className="md-plain-code"><code>{text}</code></pre>
+            </LangReadyGate>
+          ) : (
+            <SyntaxHighlighter
+              language={lang}
+              style={oneLight}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                padding: 'var(--s-3) var(--s-4)',
+                borderRadius: 'var(--r-md)',
+                background: 'color-mix(in oklch, var(--ink) 6%, transparent)',
+                border: '1px solid color-mix(in oklch, var(--ink) 12%, transparent)',
+                fontSize: 'calc(0.85em * var(--scale-code, 1))',
+                lineHeight: 1.6,
+              }}
+              codeTagProps={{
+                style: {
+                  fontFamily: 'var(--font-mono)',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  // 未命中 token 的裸文本继承正文色（--ink），避免染上 .md code 的朱砂红
+                  color: 'inherit',
+                },
+              }}
+            >
+              {text}
+            </SyntaxHighlighter>
+          )}
         </div>
       );
     }
@@ -351,9 +379,13 @@ const components: Components = {
 /**
  * 把 markdown 文本安全渲染为富文本。用于 AI 生成的聊天气泡（题干 / 讲解 / 追问），
  * 让用户看到的代码块、列表、加粗、表格等结构正常呈现。
- * 代码块带语言时做语法高亮（PrismLight：常用语言已随包注册，未注册的语言自动降级纯文本）。
+ * 代码块带语言时做语法高亮（高频语言随主包注册；冷门语言按需加载；
+ * 未注册语言自动降级纯文本）。
+ *
+ * memo：聊天线程里每个 token 到达都会重渲染父级，Markdown 文本未变的气泡
+ * （历史消息）重复解析 AST 是主要浪费；children 不变即跳过整棵渲染树。
  */
-export function Markdown({ children, className }: { children: string; className?: string }) {
+export const Markdown = memo(function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={`md${className ? ' ' + className : ''}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -361,4 +393,4 @@ export function Markdown({ children, className }: { children: string; className?
       </ReactMarkdown>
     </div>
   );
-}
+});

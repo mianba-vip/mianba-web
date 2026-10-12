@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { fmt, ReasoningPanel, type ChatMsg } from './DrillChatBits';
 import { Timer } from 'lucide-react';
 import { Tag } from '../components/ui';
@@ -6,9 +7,12 @@ import { PROBE_LABEL } from '../lib/labels';
 import type { QuestionMeta } from '../api/types';
 import { parseChoiceStem } from '../lib/choice';
 
-/** 聊天气泡渲染（含思考过程折叠面板与逐字光标）。从 Drill.tsx 拆出。 */
-
-export function ChatBubble({
+/** 聊天气泡渲染（含思考过程折叠面板与逐字光标）。从 Drill.tsx 拆出。
+ *
+ * memo：聊天线程里每个 token 到达都会重渲染整个 messages 列表，未在流式中的
+ * 历史气泡（文本/props 均不变）重复解析是纯浪费；streaming 气泡因 text 变化
+ * 仍每次重渲染，不受影响。 */
+export const ChatBubble = memo(function ChatBubble({
   msg: m,
   meta,
   timingOn,
@@ -127,6 +131,6 @@ export function ChatBubble({
       )}
     </div>
   );
-}
+});
 
 // —— 应用内确认弹窗（Electron 不支持 window.confirm/prompt，必须用组件弹窗）——
