@@ -988,6 +988,45 @@ export function Drill() {
   useEffect(() => { sendRef.current = sendAnswer; });
   useEffect(() => { addImagesRef.current = addImageFiles; });
 
+  // ===== 选择题按钮化作答：点选项 / 按 A-D 键 = 字母（+输入框里的理由）一起发送 =====
+  // 走与手动输入完全相同的 chat 链路：后端 chat 记录原文，finish 评分时
+  // looksLikeChoiceAnswer 会取「最后一个字母作答」为评分正文（GraderMcq 容错解析）。
+  const pickChoice = (key: 'A' | 'B' | 'C' | 'D') => {
+    if (!meta || (phase !== 'chatting' && phase !== 'graded')) return;
+    if (messages.some((m) => m.streaming)) return;   // AI 回复中不允许选
+    const reason = input.trim();
+    // 输入框有理由 → 「B。理由……」一起发（评分取最后的字母行不受影响）；
+    // 没有理由 → 只发字母。
+    setInput('');
+    const savedSend = sendRef.current;
+    // 直接构造发送文本并复用 sendAnswer 的链路：临时把 input 填为组合文本再发送。
+    // sendAnswer 读取 state input 的时机在同步执行栈内，先 setInput 再调用会拿到旧值，
+    // 因此这里改用受控重载：把组合文本写入 state 后由 sendAnswer 读取。
+    setInput(reason ? `${key}。${reason}` : key);
+    // setState 是异步的，同步调用 sendAnswer 会读到旧 input——用队列微任务保证先落 state。
+    queueMicrotask(() => savedSend(false));
+  };
+
+  // 选择题 A-D 快捷键：输入框未聚焦时直接选（输入框聚焦打字不拦截，
+  // 此时可用 Ctrl/⌘+回车 发送手动输入的字母/理由）
+  useEffect(() => {
+    if (!meta || meta.responseFormat !== 'CHOICE' || phase !== 'chatting' || resumedGraded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA)$/.test(target.tagName)) return;
+      if (target?.closest('.cm-editor')) return;
+      const key = e.key.toUpperCase();
+      if (['A', 'B', 'C', 'D'].includes(key)) {
+        e.preventDefault();
+        pickChoice(key as 'A' | 'B' | 'C' | 'D');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, phase, resumedGraded, input, messages]);
+
   const cmExtensions = useMemo(() => [
     // Markdown 模式：外层按 markdown 高亮；```代码块 内自动按语言 data 里匹配的语言高亮
     markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -1784,6 +1823,9 @@ export function Drill() {
               meta={meta}
               timingOn={timingOn}
               seconds={seconds}
+              {...(m.type === 'stem' && meta?.responseFormat === 'CHOICE' && phase === 'chatting' && !resumedGraded
+                ? { onPickChoice: pickChoice, choiceDisabled: aiStreaming }
+                : {})}
             />
           ))}
         </div>

@@ -175,19 +175,25 @@ export function VerdictPanel({ run, turn }: { run: ConversationRun; turn: Conver
           </summary>
           <ul className="verdict-points">
             {visible.flatMap((c) =>
-              c.pointResults.map((p, i) => (
-                <li key={`${c.conceptId}-${i}`}>
-                  <span className={`verdict-dot ${verdictClass(p.verdict)}`} />
-                  <div className="point-body">
-                    <span className={`verdict-tag ${verdictClass(p.verdict)}`}>
-                      {VERDICT_LABEL[p.verdict] ?? p.verdict}
-                    </span>
-                    {/* 评分点（讲解）与佐证（证据）均为 AI 生成，可能含加粗 / 代码 / 列表，统一走 markdown 渲染 */}
-                    <Markdown className="point-md">{p.point}</Markdown>
-                    {p.evidence && <Markdown className="evidence-md">{p.evidence}</Markdown>}
-                  </div>
-                </li>
-              )),
+              c.pointResults.map((p, i) => {
+                // 选择题判分点格式为 "A:选项文本"（GraderMcq PointVerdict）：
+                // 拆出字母键渲染成徽标，正文只留选项文本。
+                const mcq = p.point.match(/^([A-D])[:：]\s*(.+)$/);
+                return (
+                  <li key={`${c.conceptId}-${i}`}>
+                    <span className={`verdict-dot ${verdictClass(p.verdict)}`} />
+                    <div className="point-body">
+                      <span className={`verdict-tag ${verdictClass(p.verdict)}`}>
+                        {VERDICT_LABEL[p.verdict] ?? p.verdict}
+                      </span>
+                      {mcq && <span className="verdict-point-key">{mcq[1]}</span>}
+                      {/* 评分点（讲解）与佐证（证据）均为 AI 生成，可能含加粗 / 代码 / 列表，统一走 markdown 渲染 */}
+                      <Markdown className="point-md">{mcq ? mcq[2] : p.point}</Markdown>
+                      {p.evidence && <Markdown className="evidence-md">{p.evidence}</Markdown>}
+                    </div>
+                  </li>
+                );
+              }),
             )}
           </ul>
         </details>

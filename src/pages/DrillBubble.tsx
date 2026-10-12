@@ -4,6 +4,7 @@ import { Tag } from '../components/ui';
 import { Markdown } from '../components/Markdown';
 import { PROBE_LABEL } from '../lib/labels';
 import type { QuestionMeta } from '../api/types';
+import { parseChoiceStem } from '../lib/choice';
 
 /** 聊天气泡渲染（含思考过程折叠面板与逐字光标）。从 Drill.tsx 拆出。 */
 
@@ -12,15 +13,28 @@ export function ChatBubble({
   meta,
   timingOn,
   seconds,
+  onPickChoice,
+  choiceDisabled,
 }: {
   msg: ChatMsg;
   meta: QuestionMeta | null;
   timingOn: boolean;
   seconds: number;
+  /** CHOICE 题选某选项（题干气泡内嵌选项按钮；历史/浏览态不传即纯展示） */
+  onPickChoice?: (key: 'A' | 'B' | 'C' | 'D') => void;
+  /** 选项按钮禁用（AI 流式回复 / 已评分等） */
+  choiceDisabled?: boolean;
 }) {
   // 思考中 / 生成中：streaming 且还没出字
   const isThinking = m.streaming && !m.text;
   const thinkingText = m.type === 'stem' ? '正在生成题目…' : '思考中…';
+
+  // 选择题：解析题干内嵌的 A-D 选项。仅在「当前活跃题 + CHOICE + 解析成功」时
+  // 启用按钮化作答；历史气泡（浏览/继续练习）只做纯文本回显，不重复作答。
+  const choice = m.type === 'stem' && meta?.responseFormat === 'CHOICE' && !isThinking
+    ? parseChoiceStem(m.text)
+    : null;
+  const showChoiceButtons = choice?.hasChoice === true && !!onPickChoice;
 
   const rowCls = isThinking
     ? `chat-row chat-row-${m.role} chat-row-loading`
@@ -54,10 +68,28 @@ export function ChatBubble({
             <span className="spinner-sm" /> {thinkingText}
           </>
         ) : m.type === 'stem' ? (
-          // 题干不走 tutor-text（避免"讲解 ·"前缀）；思考过程流式展示（默认展开，markdown）
+          // 题干不走 tutor-text（避免"讲解 ·"前缀）；思考过程流式展示（默认展开，markdown）。
+          // 选择题：题干只渲染正文（选项行剥离为按钮），解析失败则整段原文渲染（优雅退化）。
           <>
             {m.reasoning && <ReasoningPanel text={m.reasoning} active={m.streaming} />}
-            <Markdown>{m.text}</Markdown>
+            <Markdown>{showChoiceButtons ? (choice?.body ?? m.text) : m.text}</Markdown>
+            {showChoiceButtons && choice && (
+              <div className="choice-options" role="group" aria-label="选择题选项">
+                {choice.options.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    className="choice-option"
+                    disabled={choiceDisabled}
+                    onClick={() => onPickChoice?.(o.key)}
+                  >
+                    <span className="choice-option-key">{o.key}</span>
+                    <span className="choice-option-text">{o.text}</span>
+                  </button>
+                ))}
+                <div className="choice-options-hint">点击选项或按 A–D 键作答（输入框有字时连同理由一起发送）</div>
+              </div>
+            )}
             {m.streaming && <span className="tutor-caret" aria-hidden />}
           </>
         ) : m.role === 'ai' ? (

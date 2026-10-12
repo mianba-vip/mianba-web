@@ -403,3 +403,72 @@
   max-height: 240px;
   overflow-y: auto;
 }
+
+/* ===== 选择题选项按钮（ChoiceOptions） ===== */
+.choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+.choice-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #d8dce3);
+  border-radius: 10px;
+  background: var(--bg-elev, #fff);
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease, transform .06s ease;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.choice-option:hover:not(:disabled) {
+  border-color: var(--accent, #4a7dff);
+  background: var(--bg-hover, #f3f6ff);
+  transform: translateY(-1px);
+}
+.choice-option:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.choice-option-key {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent, #4a7dff);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+}
+.choice-option-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+.choice-options-hint {
+  font-size: 12px;
+  color: var(--text-dim, #8a919c);
+}
+/* 判分面板：选项键徽标（GraderMcq 的 point 是 "A:选项文本" 前缀） */
+.verdict-point-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--accent, #4a7dff);
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
