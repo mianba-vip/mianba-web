@@ -1135,6 +1135,16 @@ export function Drill() {
     setPickedMulti([]);
   };
 
+  // 下次复习时间人性化（C4）：今天 / 明天 / N 天后
+  const fmtReviewIn = (iso: string): string => {
+    const due = new Date(iso).getTime();
+    if (Number.isNaN(due)) return '已排期';
+    const days = Math.max(0, Math.round((due - Date.now()) / 86_400_000));
+    if (days <= 0) return '今天';
+    if (days === 1) return '明天';
+    return `${days} 天后`;
+  };
+
   // 重练本题（C1 未过行动指引）：复用原题开一条新 run 重答（drill.restart 幂等语义）
   const retrySame = async () => {
     if (!grade) return;
@@ -2217,6 +2227,12 @@ export function Drill() {
                 tutorText: null,
               }}
             />
+            {/* C4 复习排程可见：答得好间隔拉长，把 FSRS 变成正向激励 */}
+            {grade.nextReviewAt && (
+              <div className="chat-next-review">
+                🗓 这个概念下次复习：{fmtReviewIn(grade.nextReviewAt)}（答得越好，间隔拉得越长）
+              </div>
+            )}
             {/* C1 行动指引：未过时把「回讲解 / 重练本题」放在眼前，别只丢一个分数 */}
             {grade.rawScore < 60 && (
               <div className="chat-verdict-actions">

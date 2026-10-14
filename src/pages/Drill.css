@@ -1559,3 +1559,13 @@
   color: var(--good);
   background: var(--good-wash);
 }
+
+/* ===== C4 下次复习提示 ===== */
+.chat-next-review {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink-2, #555);
+  background: color-mix(in oklch, var(--accent, #6c5ce7) 6%, transparent);
+}
