@@ -66,6 +66,7 @@ export interface GradeView {
   grade: string; // EASY / GOOD / HARD / MISSING
   byConceptJson: string; // JSON 字符串 -> 解析为 ByConcept[]
   transferExhausted?: boolean; // 补救测试判分后是否已达轮数上限（无需再考）
+  mcqCorrect?: string; // 选择题正确项字母（如 "AC"）：仅判分后下发，做选项级对照；非选择题无
 }
 
 export interface RehearsalView {

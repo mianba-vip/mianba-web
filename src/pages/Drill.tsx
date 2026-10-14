@@ -113,6 +113,9 @@ export function Drill() {
   const [genStatus, setGenStatus] = useState('');
   const [genElapsed, setGenElapsed] = useState(0);
 
+  // 选择题本轮点选的字母（判分后与 grade.mcqCorrect 做选项级对照：你选了X/正确答案Y）
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+
   // 当前对话是否挂在一条已判分(GRADED)的 run 上继续（历史记录「继续对话」= 用户向 AI 提问，
   // 不重新评分，故隐藏「结束并评分」）
   const [resumedGraded, setResumedGraded] = useState(false);
@@ -443,6 +446,7 @@ export function Drill() {
     setResumedGraded(false);
     setRevealed(false);
     setGenStatus('');
+    setPickedKey(null);
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -1081,6 +1085,7 @@ export function Drill() {
   const pickChoice = (key: 'A' | 'B' | 'C' | 'D') => {
     if (!meta || (phase !== 'chatting' && phase !== 'graded')) return;
     if (messages.some((m) => m.streaming)) return;   // AI 回复中不允许选
+    setPickedKey(key);
     const reason = input.trim();
     // 输入框有理由 → 「B。理由……」一起发（评分取最后的字母行不受影响）；
     // 没有理由 → 只发字母。
@@ -1925,8 +1930,16 @@ export function Drill() {
               meta={meta}
               timingOn={timingOn}
               seconds={seconds}
-              {...(m.type === 'stem' && meta?.responseFormat === 'CHOICE' && phase === 'chatting' && !resumedGraded
-                ? { onPickChoice: pickChoice, choiceDisabled: aiStreaming }
+              {...(m.type === 'stem' && meta?.responseFormat === 'CHOICE' && !resumedGraded
+                ? (phase === 'chatting'
+                    ? { onPickChoice: pickChoice, choiceDisabled: aiStreaming }
+                    : phase === 'graded'
+                      // 判分后：选项区转为「你选了 X · 正确答案 Y」的对照展示（不可再选）
+                      ? {
+                          correctKeys: grade && grade.questionId === meta.questionId ? grade.mcqCorrect : undefined,
+                          pickedKey: pickedKey ?? undefined,
+                        }
+                      : {})
                 : {})}
             />
           ))}

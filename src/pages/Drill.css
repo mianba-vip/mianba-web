@@ -1463,3 +1463,27 @@
   color: var(--danger, #d64545);
   background: var(--bad-wash);
 }
+
+/* ===== B2 选择题判分后选项级对照 ===== */
+/* 正确项：绿色高亮（判分后 correctKeys 有值时由 DrillBubble 加 is-correct） */
+.choice-option.is-correct {
+  border-color: color-mix(in oklch, var(--good) 55%, var(--line));
+  background: var(--good-wash);
+}
+.choice-option.is-correct .choice-option-key {
+  color: var(--good);
+  font-weight: 700;
+}
+/* 自己的错选：红色高亮（pickedKey 命中且不在正确项里） */
+.choice-option.is-wrong-pick {
+  border-color: color-mix(in oklch, var(--bad) 55%, var(--line));
+  background: var(--bad-wash);
+}
+.choice-option.is-wrong-pick .choice-option-key {
+  color: var(--bad);
+  font-weight: 700;
+}
+/* 对照结论行：替换作答提示行 */
+.choice-verdict-hint b {
+  font-weight: 700;
+}
