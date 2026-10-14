@@ -1121,6 +1121,17 @@ export function Drill() {
     setPickedMulti([]);
   };
 
+  // 重练本题（C1 未过行动指引）：复用原题开一条新 run 重答（drill.restart 幂等语义）
+  const retrySame = async () => {
+    if (!grade) return;
+    try {
+      const v = await drill.restart(grade.runId);
+      startQuestion(() => Promise.resolve(v), ctx ?? { kind: 'free' });
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : '重练失败，请重试');
+    }
+  };
+
   // 选择题 A-D 快捷键：输入框未聚焦时直接选（输入框聚焦打字不拦截，
   // 此时可用 Ctrl/⌘+回车 发送手动输入的字母/理由）；多选模式下按键=勾选/取消
   useEffect(() => {
@@ -2152,6 +2163,27 @@ export function Drill() {
                 tutorText: null,
               }}
             />
+            {/* C1 行动指引：未过时把「回讲解 / 重练本题」放在眼前，别只丢一个分数 */}
+            {grade.rawScore < 60 && (
+              <div className="chat-verdict-actions">
+                {ctx && (ctx.kind === 'teach' || ctx.kind === 'concept') && ctx.conceptId != null && (
+                  <Button
+                    onClick={() => {
+                      const subIdx = ctx.kind === 'teach' ? ctx.subIndex : undefined;
+                      navigate(subIdx != null
+                        ? `/drill/teach/${ctx.conceptId}/${subIdx}`
+                        : `/drill/teach/${ctx.conceptId}`);
+                    }}
+                    title="回到这个知识点的讲解，把漏的部分补上再来"
+                  >
+                    回讲解
+                  </Button>
+                )}
+                <Button variant="primary" onClick={retrySame} title="用同一道题再开一条新 run，重答一次">
+                  重练本题
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

@@ -1512,3 +1512,24 @@
   opacity: 0.45;
   cursor: default;
 }
+
+/* ===== C1 判分面板三档与人话总结 ===== */
+.verdict-badge.excellent {
+  color: var(--good);
+  border-color: color-mix(in oklch, var(--good) 55%, var(--line));
+  background: var(--good-wash);
+  font-weight: 700;
+}
+.verdict-plain-summary {
+  margin: 6px 0 2px;
+  font-size: 13px;
+  color: var(--ink-2, #555);
+  line-height: 1.5;
+}
+.chat-verdict-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line, rgba(0, 0, 0, 0.08));
+}

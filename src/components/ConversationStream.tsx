@@ -153,13 +153,17 @@ export function VerdictPanel({ run, turn }: { run: ConversationRun; turn: Conver
     .map((c) => ({ ...c, pointResults: c.pointResults.filter((p) => p.verdict?.toUpperCase() !== 'NA') }))
     .filter((c) => c.pointResults.length > 0);
   const pointCount = visible.reduce((n, c) => n + c.pointResults.length, 0);
+  // 人话总结（C1）：按要点命中情况直说，用户不用自己数细则
+  const hitCount = visible.reduce((n, c) => n + c.pointResults.filter((p) => p.verdict?.toUpperCase() === 'HIT').length, 0);
+  const partialCount = visible.reduce((n, c) => n + c.pointResults.filter((p) => p.verdict?.toUpperCase() === 'PARTIAL').length, 0);
+  const missCount = pointCount - hitCount - partialCount;
   return (
     <div className="verdict-panel">
       <div className="verdict-summary">
         <span className="verdict-score">{turn.rawScore.toFixed(0)}</span>
         <small>分</small>
-        <span className={`verdict-badge ${passedClass(turn.passed)}`}>
-          {passedLabel(turn.passed)}
+        <span className={`verdict-badge ${tierClass(turn.rawScore)}`}>
+          {tierLabel(turn.rawScore)}
         </span>
         {run.turns.length > 0 &&
           turn.round === Math.max(...run.turns.map((t) => t.round)) &&
@@ -167,6 +171,14 @@ export function VerdictPanel({ run, turn }: { run: ConversationRun; turn: Conver
             <span className="verdict-grade">run 总评 · {runGradeLabel(run)}</span>
           )}
       </div>
+      {pointCount > 0 && (
+        <div className="verdict-plain-summary">
+          {pointCount} 个要点：讲对 {hitCount}
+          {partialCount > 0 && ` · 部分命中 ${partialCount}`}
+          {missCount > 0 && ` · 漏了 ${missCount}`}
+          {hitCount === pointCount ? '，全部拿下了' : missCount > 0 ? '，漏的部分就在下方细则里' : ''}
+        </div>
+      )}
       {pointCount > 0 && (
         <details className="verdict-details">
           <summary className="verdict-details-summary">
@@ -202,15 +214,16 @@ export function VerdictPanel({ run, turn }: { run: ConversationRun; turn: Conver
   );
 }
 
-function passedClass(p: boolean | null): string {
-  if (p === true) return 'pass';
-  if (p === false) return 'fail';
-  return '';
+/** 三档呈现（C1）：≥90 优秀 / ≥60 通过 / <60 未过。61 分和 95 分不再长得一样。 */
+function tierClass(score: number): string {
+  if (score >= 90) return 'excellent';
+  if (score >= 60) return 'pass';
+  return 'fail';
 }
-function passedLabel(p: boolean | null): string {
-  if (p === true) return '通过';
-  if (p === false) return '未中';
-  return '—';
+function tierLabel(score: number): string {
+  if (score >= 90) return '优秀';
+  if (score >= 60) return '通过';
+  return '未过';
 }
 function runGradeLabel(run: ConversationRun): string {
   return GRADE_LABEL[run.grade ?? ''] ?? run.grade ?? '—';
