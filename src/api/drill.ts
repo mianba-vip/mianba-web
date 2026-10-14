@@ -421,6 +421,25 @@ export function lessonChatStream(
   }, { onToken, onReasoning, onDone, onError });
 }
 
+/**
+ * 判分后讲解流（GET /{runId}/tutor-stream，SSE）：针对本轮作答的逐点讲解，
+ * token 逐帧推送，完成后后端把全文写回 drill_turn.tutor_text。
+ * 旧两段式被 submit 合并后此端点仍在（判分后的补讲解/自动讲解用它）。
+ */
+export function tutorStream(
+  runId: number,
+  onToken: (token: string) => void,
+  onReasoning: (text: string) => void,
+  onDone: () => void,
+  onError: (status?: number, message?: string) => void,
+): TutorStream {
+  const token = getToken();
+  return openSse(`${API_BASE_SSE}/api/drill/${runId}/tutor-stream`, {
+    method: 'GET',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  }, { onToken, onReasoning, onDone, onError });
+}
+
 export const drill = {
   next: () => apiFetch<QuestionView>('/drill/next', { method: 'POST' }),
 

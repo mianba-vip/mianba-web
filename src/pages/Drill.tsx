@@ -5,7 +5,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { keymap, EditorView } from '@codemirror/view';
-import { drill, aiSettings, chatStream, lessonChatStream, lessonStream, type TutorStream } from '../api/drill';
+import { drill, aiSettings, chatStream, lessonChatStream, lessonStream, tutorStream, type TutorStream } from '../api/drill';
 import { Button } from '../components/ui';
 import { NoteDialog } from '../components/NoteDialog';
 import { ApiError } from '../api/client';
@@ -450,6 +450,7 @@ export function Drill() {
     setGenStatus('');
     setPickedKey(null);
     setPickedMulti([]);
+    autoTutorRef.current = false;
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -1132,6 +1133,32 @@ export function Drill() {
     }
   };
 
+  // 判分后自动讲解（C2）：finish 落分即自动流式拉一段「为什么是这个分」的讲解进对话，
+  // 用户不必再打字问「我错哪了」；后端 tutor-stream 端点现成，讲解全文落 drill_turn.tutor_text。
+  const autoTutorRef = useRef(false);
+  const playAutoTutor = (runId: number) => {
+    if (autoTutorRef.current) return;   // 一条 run 只自动讲一次（重复 finish/幂等返回不重讲）
+    autoTutorRef.current = true;
+    const aiId = nextMsgId();
+    setMessages((prev) => [...prev, { id: aiId, role: 'ai', text: '', streaming: true, type: 'chat' }]);
+    sseRef.current = tutorStream(
+      runId,
+      (token) => setMessages((prev) => prev.map((mm) =>
+        mm.id === aiId ? { ...mm, text: mm.text + token } : mm)),
+      () => { /* 推理过程不展示：判分讲解短，直接看正文 */ },
+      () => {
+        setMessages((prev) => prev.map((mm) =>
+          mm.id === aiId ? { ...mm, streaming: false } : mm));
+        sseRef.current = null;
+      },
+      () => {
+        // 讲解失败不打扰：移除空气泡即可（判分结果已完整呈现）
+        setMessages((prev) => prev.filter((mm) => mm.id !== aiId));
+        sseRef.current = null;
+      },
+    );
+  };
+
   // 选择题 A-D 快捷键：输入框未聚焦时直接选（输入框聚焦打字不拦截，
   // 此时可用 Ctrl/⌘+回车 发送手动输入的字母/理由）；多选模式下按键=勾选/取消
   useEffect(() => {
@@ -1261,6 +1288,8 @@ export function Drill() {
         drill.completeTask(ctx.taskId).catch(() => {});
       }
       setPhase('graded');
+      // C2：判分完成自动讲一段「为什么是这个分」——反馈链不在这里断掉
+      playAutoTutor(g.runId);
     } catch (e) {
       setPhase('chatting');
       if (e instanceof ApiError && e.status === 409) setGate(e.message);
@@ -2129,7 +2158,13 @@ export function Drill() {
                     </Button>
                   )}
                   {phase === 'graded' && (
-                    <Button onClick={goNext}>
+                    <Button
+                      variant={grade && grade.rawScore < 60 ? 'ghost' : 'primary'}
+                      onClick={goNext}
+                      title={grade && grade.rawScore < 60
+                        ? '这题没过：建议先看下方讲解与「重练本题」，掌握闸门不建议硬冲下一题'
+                        : undefined}
+                    >
                       下一题 <ChevronRight size={16} strokeWidth={1.6} />
                     </Button>
                   )}
