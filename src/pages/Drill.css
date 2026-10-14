@@ -1569,3 +1569,30 @@
   color: var(--ink-2, #555);
   background: color-mix(in oklch, var(--accent, #6c5ce7) 6%, transparent);
 }
+
+/* ===== C5 看答案确认与揭示提示 ===== */
+.chat-reveal-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bad-wash);
+  font-size: 13px;
+}
+.chat-reveal-confirm-text {
+  flex: 1 1 auto;
+  min-width: 200px;
+  color: var(--bad);
+  font-weight: 500;
+}
+.chat-revealed-note {
+  margin: 0 0 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--warn);
+  background: var(--warn-wash);
+}

@@ -121,6 +121,10 @@ export function Drill() {
   // 苏格拉底判定「已达标」提示（C3）：done 时告诉用户可以安全点「结束并评分」
   const [judgeDone, setJudgeDone] = useState<{ state: string; coverage: number } | null>(null);
 
+  // 看答案确认（C5）：每条 run 只确认一次，之后直接看；揭示后持续显示代价提示
+  const [askReveal, setAskReveal] = useState(false);
+  const [revealAskedOnce, setRevealAskedOnce] = useState(false);
+
   // 当前对话是否挂在一条已判分(GRADED)的 run 上继续（历史记录「继续对话」= 用户向 AI 提问，
   // 不重新评分，故隐藏「结束并评分」）
   const [resumedGraded, setResumedGraded] = useState(false);
@@ -455,6 +459,8 @@ export function Drill() {
     setPickedMulti([]);
     autoTutorRef.current = false;
     setJudgeDone(null);
+    setAskReveal(false);
+    setRevealAskedOnce(false);
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -2046,6 +2052,31 @@ export function Drill() {
               现在点「结束并评分」即可，继续补充也可以
             </div>
           )}
+          {askReveal && (
+            <div className="chat-reveal-confirm">
+              <span className="chat-reveal-confirm-text">
+                看了答案，这题就按「重来（AGAIN）」计分、复习间隔会重置——确定吗？
+              </span>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setAskReveal(false);
+                  setRevealAskedOnce(true);
+                  sendAnswer(true);
+                }}
+              >
+                仍然看答案
+              </Button>
+              <Button variant="ghost" onClick={() => setAskReveal(false)}>
+                再想想
+              </Button>
+            </div>
+          )}
+          {revealed && phase !== 'generating' && (
+            <div className="chat-revealed-note">
+              👁 已看答案 · 本题按「重来」计、复习间隔已重置——专心把这题吃透就好
+            </div>
+          )}
           {phase === 'finishing' ? (
             // 评分中：禁用
             <div className="chat-input-foot">
@@ -2144,9 +2175,13 @@ export function Drill() {
                   {phase !== 'generating' && !revealed && (
                     <Button
                       variant="ghost"
-                      onClick={() => sendAnswer(true)}
+                      onClick={() => {
+                        // C5：首次点「看答案」先确认代价（本次封顶 AGAIN、间隔重置）；同 run 只提醒一次
+                        if (revealAskedOnce) sendAnswer(true);
+                        else setAskReveal(true);
+                      }}
                       disabled={aiStreaming}
-                      title="直接看参考答案（看答案后不再追问）"
+                      title="直接看参考答案（看答案后不再追问，本次最多按重来计）"
                     >
                       看答案
                     </Button>
