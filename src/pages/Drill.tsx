@@ -115,6 +115,8 @@ export function Drill() {
 
   // 选择题本轮点选的字母（判分后与 grade.mcqCorrect 做选项级对照：你选了X/正确答案Y）
   const [pickedKey, setPickedKey] = useState<string | null>(null);
+  // 多选题的已勾选字母（点选只勾选，确认后组合发送，如 AC）
+  const [pickedMulti, setPickedMulti] = useState<string[]>([]);
 
   // 当前对话是否挂在一条已判分(GRADED)的 run 上继续（历史记录「继续对话」= 用户向 AI 提问，
   // 不重新评分，故隐藏「结束并评分」）
@@ -447,6 +449,7 @@ export function Drill() {
     setRevealed(false);
     setGenStatus('');
     setPickedKey(null);
+    setPickedMulti([]);
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -1082,27 +1085,46 @@ export function Drill() {
   // ===== 选择题按钮化作答：点选项 / 按 A-D 键 = 字母（+输入框里的理由）一起发送 =====
   // 走与手动输入完全相同的 chat 链路：后端 chat 记录原文，finish 评分时
   // looksLikeChoiceAnswer 会取「最后一个字母作答」为评分正文（GraderMcq 容错解析）。
-  const pickChoice = (key: 'A' | 'B' | 'C' | 'D') => {
-    if (!meta || (phase !== 'chatting' && phase !== 'graded')) return;
-    if (messages.some((m) => m.streaming)) return;   // AI 回复中不允许选
-    setPickedKey(key);
+  // 选项作答统一出口：把组合文本（字母/字母组合 + 理由）经 sendAnswer 链路发出
+  const sendChoiceText = (choiceText: string) => {
     const reason = input.trim();
-    // 输入框有理由 → 「B。理由……」一起发（评分取最后的字母行不受影响）；
-    // 没有理由 → 只发字母。
     setInput('');
     const savedSend = sendRef.current;
     // 直接构造发送文本并复用 sendAnswer 的链路：临时把 input 填为组合文本再发送。
     // sendAnswer 读取 state input 的时机在同步执行栈内，先 setInput 再调用会拿到旧值，
     // 因此这里改用受控重载：把组合文本写入 state 后由 sendAnswer 读取。
-    setInput(reason ? `${key}。${reason}` : key);
+    setInput(reason ? `${choiceText}。${reason}` : choiceText);
     // setState 是异步的，同步调用 sendAnswer 会读到旧 input——用队列微任务保证先落 state。
     queueMicrotask(() => savedSend(false));
   };
 
+  const pickChoice = (key: 'A' | 'B' | 'C' | 'D') => {
+    if (!meta || (phase !== 'chatting' && phase !== 'graded')) return;
+    if (messages.some((m) => m.streaming)) return;   // AI 回复中不允许选
+    // 多选：点选只做勾选/取消，凑齐后点「确认作答」统一发送（字母组合如 AC）
+    if (meta.responseFormat === 'MULTI') {
+      setPickedMulti((prev) =>
+        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key].sort(),
+      );
+      return;
+    }
+    // 单选/判断：点选即发送
+    setPickedKey(key);
+    sendChoiceText(key);
+  };
+
+  // 多选题确认作答：把已勾选字母组合成一段（如 AC）发送；一个都没勾不允许发
+  const confirmMulti = () => {
+    if (!meta || phase !== 'chatting' || pickedMulti.length === 0) return;
+    if (messages.some((m) => m.streaming)) return;
+    sendChoiceText(pickedMulti.join(''));
+    setPickedMulti([]);
+  };
+
   // 选择题 A-D 快捷键：输入框未聚焦时直接选（输入框聚焦打字不拦截，
-  // 此时可用 Ctrl/⌘+回车 发送手动输入的字母/理由）
+  // 此时可用 Ctrl/⌘+回车 发送手动输入的字母/理由）；多选模式下按键=勾选/取消
   useEffect(() => {
-    if (!meta || meta.responseFormat !== 'CHOICE' || phase !== 'chatting' || resumedGraded) return;
+    if (!meta || !['CHOICE', 'MULTI', 'JUDGE'].includes(meta.responseFormat) || phase !== 'chatting' || resumedGraded) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
@@ -1930,14 +1952,21 @@ export function Drill() {
               meta={meta}
               timingOn={timingOn}
               seconds={seconds}
-              {...(m.type === 'stem' && meta?.responseFormat === 'CHOICE' && !resumedGraded
+              {...(m.type === 'stem' && meta && ['CHOICE', 'MULTI', 'JUDGE'].includes(meta.responseFormat) && !resumedGraded
                 ? (phase === 'chatting'
-                    ? { onPickChoice: pickChoice, choiceDisabled: aiStreaming }
+                    ? {
+                        onPickChoice: pickChoice,
+                        choiceDisabled: aiStreaming,
+                        multiMode: meta.responseFormat === 'MULTI',
+                        selectedKeys: pickedMulti,
+                        onConfirmMulti: confirmMulti,
+                        pickedKey: meta.responseFormat === 'MULTI' ? (pickedMulti.length ? pickedMulti.join('') : undefined) : (pickedKey ?? undefined),
+                      }
                     : phase === 'graded'
                       // 判分后：选项区转为「你选了 X · 正确答案 Y」的对照展示（不可再选）
                       ? {
                           correctKeys: grade && grade.questionId === meta.questionId ? grade.mcqCorrect : undefined,
-                          pickedKey: pickedKey ?? undefined,
+                          pickedKey: pickedKey ?? (pickedMulti.length ? pickedMulti.join('') : undefined),
                         }
                       : {})
                 : {})}

@@ -1487,3 +1487,28 @@
 .choice-verdict-hint b {
   font-weight: 700;
 }
+
+/* ===== B3 多选勾选态与确认按钮 ===== */
+.choice-option.is-picked {
+  border-color: color-mix(in oklch, var(--accent, #6c5ce7) 55%, var(--line));
+  background: color-mix(in oklch, var(--accent, #6c5ce7) 8%, transparent);
+}
+.choice-option.is-picked .choice-option-key {
+  color: var(--accent, #6c5ce7);
+  font-weight: 700;
+}
+.choice-multi-confirm {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--accent, #6c5ce7) 45%, var(--line));
+  background: var(--accent, #6c5ce7);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.choice-multi-confirm:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

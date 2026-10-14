@@ -21,27 +21,36 @@ export const ChatBubble = memo(function ChatBubble({
   choiceDisabled,
   correctKeys,
   pickedKey,
+  multiMode,
+  selectedKeys,
+  onConfirmMulti,
 }: {
   msg: ChatMsg;
   meta: QuestionMeta | null;
   timingOn: boolean;
   seconds: number;
-  /** CHOICE 题选某选项（题干气泡内嵌选项按钮；历史/浏览态不传即纯展示） */
+  /** 客观题（单选/多选/判断）选某选项（题干气泡内嵌选项按钮；历史/浏览态不传即纯展示） */
   onPickChoice?: (key: 'A' | 'B' | 'C' | 'D') => void;
   /** 选项按钮禁用（AI 流式回复 / 已评分等） */
   choiceDisabled?: boolean;
   /** 判分后下发的正确项字母（B2 选项级对照）；非判分态不传 */
   correctKeys?: string;
-  /** 本轮用户点选/作答的字母（对照时标红自己的错选） */
+  /** 本轮用户点选/作答的字母（对照时标红自己的错选；多选为组合如 "AC"） */
   pickedKey?: string;
+  /** 多选模式（B3）：点选只勾选，凑齐后走 onConfirmMulti 组合发送 */
+  multiMode?: boolean;
+  selectedKeys?: string[];
+  onConfirmMulti?: () => void;
 }) {
   // 思考中 / 生成中：streaming 且还没出字
   const isThinking = m.streaming && !m.text;
   const thinkingText = m.type === 'stem' ? '正在生成题目…' : '思考中…';
 
-  // 选择题：解析题干内嵌的 A-D 选项。仅在「当前活跃题 + CHOICE + 解析成功」时
-  // 启用按钮化作答；历史气泡（浏览/继续练习）只做纯文本回显，不重复作答。
-  const choice = m.type === 'stem' && meta?.responseFormat === 'CHOICE' && !isThinking
+  // 客观题（单选 CHOICE / 多选 MULTI / 判断 JUDGE）：解析题干内嵌的选项行。
+  // 仅在「当前活跃题 + 解析成功」时启用按钮化作答；历史气泡只做纯文本回显。
+  const isObjectiveFormat = meta
+    && ['CHOICE', 'MULTI', 'JUDGE'].includes(meta.responseFormat);
+  const choice = m.type === 'stem' && isObjectiveFormat && !isThinking
     ? parseChoiceStem(m.text)
     : null;
   // 判分后（correctKeys 有值）也渲染选项区：不可再选，但做「你选了 X / 正确答案 Y」对照
@@ -66,6 +75,9 @@ export const ChatBubble = memo(function ChatBubble({
         {m.type === 'stem' && meta && (
           <div className="chat-stem-meta">
             <Tag>{PROBE_LABEL[meta.probeType] ?? meta.probeType}</Tag>
+            {isObjectiveFormat && (
+              <Tag>{meta.responseFormat === 'MULTI' ? '多选' : meta.responseFormat === 'JUDGE' ? '判断' : '单选'}</Tag>
+            )}
             <span className="eyebrow">run #{meta.runId}</span>
             {timingOn && (
               <span className="timer-chip">
@@ -85,28 +97,46 @@ export const ChatBubble = memo(function ChatBubble({
             {m.reasoning && <ReasoningPanel text={m.reasoning} active={m.streaming} />}
             <Markdown>{showChoiceButtons ? (choice?.body ?? m.text) : m.text}</Markdown>
             {showChoiceButtons && choice && (
-              <div className="choice-options" role="group" aria-label="选择题选项">
+              <div className="choice-options" role="group" aria-label="客观题选项">
                 {choice.options.map((o) => {
                   const isCorrect = !!correctKeys?.includes(o.key);
-                  const isWrongPick = !!correctKeys && pickedKey === o.key && !isCorrect;
+                  const isWrongPick = !!correctKeys && !!pickedKey?.includes(o.key) && !isCorrect;
+                  const isPicked = !correctKeys && multiMode
+                    && !!selectedKeys?.includes(o.key);
                   return (
                     <button
                       key={o.key}
                       type="button"
-                      className={`choice-option${isCorrect ? ' is-correct' : ''}${isWrongPick ? ' is-wrong-pick' : ''}`}
+                      className={`choice-option${isCorrect ? ' is-correct' : ''}${isWrongPick ? ' is-wrong-pick' : ''}${isPicked ? ' is-picked' : ''}`}
                       disabled={choiceDisabled || !onPickChoice}
                       onClick={() => onPickChoice?.(o.key)}
                     >
-                      <span className="choice-option-key">{o.key}{isCorrect ? ' ✓' : isWrongPick ? ' ✗' : ''}</span>
+                      <span className="choice-option-key">
+                        {o.key}{isCorrect ? ' ✓' : isWrongPick ? ' ✗' : isPicked ? ' ●' : ''}
+                      </span>
                       <span className="choice-option-text">{o.text}</span>
                     </button>
                   );
                 })}
+                {multiMode && !correctKeys && (
+                  <button
+                    type="button"
+                    className="choice-multi-confirm"
+                    disabled={choiceDisabled || !onConfirmMulti || (selectedKeys?.length ?? 0) === 0}
+                    onClick={() => onConfirmMulti?.()}
+                  >
+                    确认作答{selectedKeys && selectedKeys.length > 0 ? `（${selectedKeys.join('')}）` : '：先勾选上方选项'}
+                  </button>
+                )}
                 {correctKeys ? (
                   <div className="choice-options-hint choice-verdict-hint">
                     你选了 <b>{pickedKey ?? '—'}</b> · 正确答案 <b>{correctKeys}</b>
-                    {pickedKey && correctKeys.includes(pickedKey) ? '，答对了' : '，答错了——看看下方评分细则漏在哪'}
+                    {pickedKey && correctKeys === pickedKey ? '，答对了' : '，答错了——看看下方评分细则漏在哪'}
                   </div>
+                ) : multiMode ? (
+                  <div className="choice-options-hint">多选题：点选项（或按 A–D 键）勾选/取消，凑齐后点「确认作答」发送</div>
+                ) : meta?.responseFormat === 'JUDGE' ? (
+                  <div className="choice-options-hint">判断题：点选项（或按 A/B 键）作答；输入框有字时连同理由一起发送</div>
                 ) : (
                   <div className="choice-options-hint">点击选项或按 A–D 键作答（输入框有字时连同理由一起发送）</div>
                 )}
