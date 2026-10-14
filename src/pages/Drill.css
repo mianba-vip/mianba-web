@@ -1533,3 +1533,29 @@
   padding-top: 10px;
   border-top: 1px dashed var(--line, rgba(0, 0, 0, 0.08));
 }
+
+/* ===== C3 苏格拉底状态可视化 ===== */
+.chat-judge-tag {
+  margin-bottom: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+}
+.chat-judge-tag.guide {
+  color: var(--warn);
+  background: var(--warn-wash);
+}
+.chat-judge-tag.done {
+  color: var(--good);
+  background: var(--good-wash);
+}
+.chat-judge-done-hint {
+  margin: 0 0 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--good);
+  background: var(--good-wash);
+}

@@ -118,6 +118,9 @@ export function Drill() {
   // 多选题的已勾选字母（点选只勾选，确认后组合发送，如 AC）
   const [pickedMulti, setPickedMulti] = useState<string[]>([]);
 
+  // 苏格拉底判定「已达标」提示（C3）：done 时告诉用户可以安全点「结束并评分」
+  const [judgeDone, setJudgeDone] = useState<{ state: string; coverage: number } | null>(null);
+
   // 当前对话是否挂在一条已判分(GRADED)的 run 上继续（历史记录「继续对话」= 用户向 AI 提问，
   // 不重新评分，故隐藏「结束并评分」）
   const [resumedGraded, setResumedGraded] = useState(false);
@@ -451,6 +454,7 @@ export function Drill() {
     setPickedKey(null);
     setPickedMulti([]);
     autoTutorRef.current = false;
+    setJudgeDone(null);
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -1051,6 +1055,15 @@ export function Drill() {
         setRevealed(true);
       },
       sendingImages,
+      (state, coverage) => {
+        // C3 event:judge —— 苏格拉底判定透出：引导气泡打标签；达标提示可安全结束评分
+        setMessages((prev) => prev.map((mm) =>
+          mm.id === aiMsgId ? { ...mm, judge: state } : mm,
+        ));
+        setJudgeDone(state.toLowerCase() === 'done'
+          ? { state: 'done', coverage }
+          : null);
+      },
     );
   };
 
@@ -2017,6 +2030,12 @@ export function Drill() {
         {/* 输入区：按 phase 分态（resumedGraded 时隐藏「结束并评分」）
             苏格拉底：chatting=答疑；graded=已判分，保留输入框做教学对话（不评分） */}
         <div className="chat-input card">
+          {phase === 'chatting' && judgeDone && (
+            <div className="chat-judge-done-hint">
+              ✓ AI 判定要点已覆盖（约 {Math.round((judgeDone.coverage ?? 0) * 100)}%）——
+              现在点「结束并评分」即可，继续补充也可以
+            </div>
+          )}
           {phase === 'finishing' ? (
             // 评分中：禁用
             <div className="chat-input-foot">

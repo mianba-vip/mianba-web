@@ -148,6 +148,12 @@ export const ChatBubble = memo(function ChatBubble({
           // AI 对话回复走 tutor-text 样式；思考过程流式展示（默认展开，markdown），正文保持干净。
           // revealed=true（答案已揭示）时在气泡顶部渲染「参考答案」分隔线。
           <>
+            {m.judge === 'needs_guide' && (
+              <div className="chat-judge-tag guide">💡 引导 · AI 在提示你补齐没讲到的要点</div>
+            )}
+            {m.judge === 'done' && (
+              <div className="chat-judge-tag done">✓ 已达标 · 这轮回答覆盖了要点</div>
+            )}
             {m.revealed && (
               <div className="chat-reveal-divider">
                 <span>参考答案 · 此后的回答不再计入评分</span>

@@ -85,6 +85,7 @@ export interface ChatMsg {
   paused?: boolean;   // AI 回复被用户「暂停」：已显示的内容保留，但未答完的回复不落库
   images?: string[];  // 用户消息附带的图片（data URL）
   revealed?: boolean; // 该 AI 回复是「参考答案」（答案已揭示，评分只取揭示之前的回答）
+  judge?: string;     // 苏格拉底判定状态（C3）：answering / needs_guide / done —— 引导气泡打标签
 }
 
 let msgCounter = 0;

@@ -54,6 +54,7 @@ interface SseHandlers {
   onReasoning?: (text: string) => void;
   onReveal?: () => void; // event: reveal —— 答案已揭示（评分只取揭示之前的回答）
   onStatus?: (text: string) => void; // event: status —— 阶段进度（流式出题：恢复/上下文/生成中/重试）
+  onJudge?: (state: string, coverage: number) => void; // event: judge —— 苏格拉底判定（C3 状态可视化）
   onToken: (token: string) => void;
   onDone: (fullText?: string) => void;
   onDoneView?: (v: QuestionView) => void; // 流式出题：done 事件带 QuestionView
@@ -155,6 +156,13 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
           }
         } else if (currentEvent === 'reveal') {
           if (handlers.onReveal) handlers.onReveal();
+        } else if (currentEvent === 'judge') {
+          if (handlers.onJudge) {
+            try {
+              const parsed = JSON.parse(payload) as { state?: string; coverage?: number };
+              handlers.onJudge(parsed.state ?? '', parsed.coverage ?? 0);
+            } catch { /* 坏帧忽略 */ }
+          }
         } else if (currentEvent === 'error') {
           if (handlers.onError) {
             try {
@@ -355,6 +363,7 @@ export function chatStream(
   onError: (status?: number, message?: string) => void,
   onReveal?: () => void,
   images?: string[],
+  onJudge?: (state: string, coverage: number) => void,
 ): TutorStream {
   const token = getToken();
   const url = `${API_BASE_SSE}/api/drill/${runId}/chat`;
@@ -365,7 +374,7 @@ export function chatStream(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ rawAnswer, reveal, images: images ?? [] }),
-  }, { onToken, onReasoning, onDone: () => onDone(), onError, onReveal });
+  }, { onToken, onReasoning, onDone: () => onDone(), onError, onReveal, onJudge });
 }
 
 /**
