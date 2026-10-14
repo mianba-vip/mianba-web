@@ -858,26 +858,48 @@ export function Drill() {
     if (!teach || teach.curIdx < 0) return;
     const t = teach;
     startQuestion(
-      () => new Promise<QuestionView>((resolve, reject) => {
-        const fail = (status: number | undefined, msg?: string) =>
+      () => openStartStream(t.conceptId, t.subPoints[t.curIdx]),
+      { kind: 'teach', conceptId: t.conceptId, subIndex: t.curIdx, planId: t.planId, taskId: t.taskId },
+    );
+  };
+
+  /**
+   * 流式出题 Promise 封装（带一次自动重试）：网络闪断 / 5xx / 网关 522 这类瞬时失败，
+   * 2.5 秒后自动重开流并提示；401/409 等业务状态码不重试（重试也不会成功，直接报）。
+   * 取消（复用 sseRef 的 cancel 钩子）也会 settle，防 genLock 永不解锁。
+   */
+  const openStartStream = (conceptId: number, subPoint: string): Promise<QuestionView> =>
+    new Promise<QuestionView>((resolve, reject) => {
+      let attempt = 0;
+      let cancelled = false;
+      let stream: TutorStream | null = null;
+      const open = () => {
+        const fail = (status: number | undefined, msg?: string) => {
+          const retryable = status === undefined || status >= 500;
+          if (retryable && attempt < 1) {
+            attempt += 1;
+            setGenStatus(`生成失败（${msg || '网络异常'}），2.5 秒后自动重试…`);
+            setTimeout(() => { if (!cancelled) open(); }, 2500);
+            return;
+          }
           reject(new ApiError(status ?? 0, msg || '题目生成失败'));
-        const stream = drill.startStream(
-          t.conceptId, t.subPoints[t.curIdx],
+        };
+        stream = drill.startStream(
+          conceptId, subPoint,
           (s) => setGenStatus(s),
           (v) => resolve(v),
           fail,
         );
-        // 取消也要 settle Promise（复用 sseRef 的 cancel 钩子），否则 genLock 永不解锁
-        sseRef.current = {
-          cancel: () => {
-            stream.cancel();
-            fail(0, '已取消');
-          },
-        };
-      }),
-      { kind: 'teach', conceptId: t.conceptId, subIndex: t.curIdx, planId: t.planId, taskId: t.taskId },
-    );
-  };
+      };
+      open();
+      sseRef.current = {
+        cancel: () => {
+          cancelled = true;
+          stream?.cancel();
+          reject(new ApiError(0, '已取消'));
+        },
+      };
+    });
 
   // 基于整个知识点出题（范围 = 已学内容 + 整个知识点），不只考单个子知识点
   const practiceWholeConcept = () => {
