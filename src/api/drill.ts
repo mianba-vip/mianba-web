@@ -435,6 +435,13 @@ export const drill = {
   outline: (conceptId: number) =>
     apiFetch<OutlineView>(`/drill/${conceptId}/outline`, { method: 'POST' }),
 
+  // 讲解期预热出题：讲解流结束后触发，后台提前生成该子点的第一道题（fire-and-forget，
+  // 失败静默——做题时走正常现场生成；后端同一子点有去重，重复触发无害）
+  prewarm: (conceptId: number, subPoint: string) =>
+    apiFetch<{ ok: boolean }>(`/drill/${conceptId}/prewarm?subPoint=${encodeURIComponent(subPoint)}`, {
+      method: 'POST',
+    }).catch(() => undefined),
+
   // 讲解页答疑：历史消息（当前用户私有，按时间升序）
   lessonQa: (conceptId: number, subPoint: string) =>
     apiFetch<LessonQaMessageView[]>(`/drill/${conceptId}/lesson/qa?subPoint=${encodeURIComponent(subPoint)}`),

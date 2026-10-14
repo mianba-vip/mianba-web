@@ -542,7 +542,13 @@ export function Drill() {
       subPoint,
       (token) => setLessonText((prev) => prev + token),
       (reasoning) => setLessonReasoning((prev) => prev + reasoning),
-      () => { setLessonBusy(false); sseRef.current = null; },
+      () => {
+        setLessonBusy(false);
+        sseRef.current = null;
+        // 讲解读完即点「开始做题」是主路径：读讲解的 1~2 分钟正是天然的生成窗口，
+        // 后台先把该子点的第一道题生成好（后端去重，重复触发无害；失败静默）
+        drill.prewarm(conceptId, subPoint);
+      },
       (_status, msg) => {
         setLessonBusy(false);
         sseRef.current = null;
