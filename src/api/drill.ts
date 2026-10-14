@@ -53,6 +53,7 @@ interface SseHandlers {
   onDraft?: (draft: StudyPlanDraft | null) => void;
   onReasoning?: (text: string) => void;
   onReveal?: () => void; // event: reveal —— 答案已揭示（评分只取揭示之前的回答）
+  onStatus?: (text: string) => void; // event: status —— 阶段进度（流式出题：恢复/上下文/生成中/重试）
   onToken: (token: string) => void;
   onDone: (fullText?: string) => void;
   onDoneView?: (v: QuestionView) => void; // 流式出题：done 事件带 QuestionView
@@ -157,11 +158,19 @@ function openSse(url: string, init: RequestInit, handlers: SseHandlers): TutorSt
         } else if (currentEvent === 'error') {
           if (handlers.onError) {
             try {
-              const parsed = JSON.parse(payload) as { message?: string };
-              handlers.onError(undefined, parsed.message);
+              // 后端流式端点的业务异常帧带 HTTP 状态码（闸门 409 等），尽量透传给调用方
+              const parsed = JSON.parse(payload) as { message?: string; status?: number };
+              handlers.onError(typeof parsed.status === 'number' ? parsed.status : undefined, parsed.message);
             } catch {
               handlers.onError(undefined, payload);
             }
+          }
+        } else if (currentEvent === 'status') {
+          if (handlers.onStatus) {
+            try {
+              const parsed = JSON.parse(payload) as { text?: string };
+              if (typeof parsed.text === 'string' && parsed.text) handlers.onStatus(parsed.text);
+            } catch { /* 坏帧忽略，等下一帧 */ }
           }
         } else if (currentEvent === 'done') {
           finished = true;
@@ -472,11 +481,13 @@ export const drill = {
       body: JSON.stringify({ planId, mode, layer, conceptId }),
     }),
 
-  // —— 流式出题：思考 + 题干逐字推送（不用干等） ——
+  // —— 流式出题（SSE）：阶段状态实时下发（event:status），题目就绪后 done 携带 QuestionView ——
+  // 与阻塞式 drill.start 同一套闸门/出题逻辑，但连接立即建立、全程有心跳，
+  // 不会像阻塞 POST 那样在网关首包超时窗口内零字节被 522 掐断
   startStream: (
     conceptId: number,
-    onReasoning: (t: string) => void,
-    onStem: (t: string) => void,
+    subPoint: string | undefined,
+    onStatus: (text: string) => void,
     onDone: (v: QuestionView) => void,
     onError: (status?: number, message?: string) => void,
   ): TutorStream => {
@@ -484,8 +495,8 @@ export const drill = {
     return openSse(`${API_BASE_SSE}/api/drill/start/stream`, {
       method: 'POST',
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conceptId }),
-    }, { onReasoning, onToken: onStem, onDoneView: onDone, onDone: () => {}, onError });
+      body: JSON.stringify({ conceptId, subPoint }),
+    }, { onStatus, onToken: () => {}, onDoneView: onDone, onDone: () => {}, onError });
   },
 
   startPlanStream: (

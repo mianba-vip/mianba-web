@@ -109,6 +109,10 @@ export function Drill() {
   // 已看答案（reveal）：看答案后不再追问
   const [revealed, setRevealed] = useState(false);
 
+  // 流式出题：后端阶段状态（event:status）+ 已等待秒数，拼进题干气泡让等待可见（不干等）
+  const [genStatus, setGenStatus] = useState('');
+  const [genElapsed, setGenElapsed] = useState(0);
+
   // 当前对话是否挂在一条已判分(GRADED)的 run 上继续（历史记录「继续对话」= 用户向 AI 提问，
   // 不重新评分，故隐藏「结束并评分」）
   const [resumedGraded, setResumedGraded] = useState(false);
@@ -405,6 +409,22 @@ export function Drill() {
   }, [location.state]);
 
   // ===== 题目生成：同步拿回 QuestionView → 打字机逐字展示题干 → 进入对话 =====
+  // 生成中：每秒累计已等待时长（与后端阶段状态一起展示）
+  useEffect(() => {
+    if (phase !== 'generating') return;
+    setGenElapsed(0);
+    const timer = setInterval(() => setGenElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [phase]);
+
+  // 阶段状态写进题干气泡：等待期间气泡里是「正在生成题目 · 已等 12s」而非空白。
+  // meta 到手（题目已在打字机逐字展示）后停写，避免盖掉题干
+  useEffect(() => {
+    if (phase !== 'generating' || meta) return;
+    const text = `${genStatus || '正在生成题目'} · 已等 ${genElapsed}s`;
+    setMessages((prev) => prev.map((mm, i) =>
+      i === 0 && mm.type === 'stem' ? { ...mm, text } : mm));
+  }, [genStatus, genElapsed, phase, meta]);
   const startQuestion = async (apiFn: () => Promise<QuestionView>, sessionCtx: SessionCtx) => {
     if (genLockRef.current) return;
     genLockRef.current = true;
@@ -422,6 +442,7 @@ export function Drill() {
     setGrade(null);
     setResumedGraded(false);
     setRevealed(false);
+    setGenStatus('');
     setPhase('generating');
     setBrowseQid(null);
     // 新题目：恢复自动跟随、重置作答标记，避免残留上一题的状态
@@ -825,12 +846,29 @@ export function Drill() {
     }
   };
 
-  // 讲完当前子点，开始做题（限定到该子点）
+  // 讲完当前子点，开始做题（限定到该子点）——走 SSE 流式出题：阶段状态实时可见，
+  // 连接立即建立全程心跳，不会被网关在首包超时窗口内掐断（阻塞式 /start 的 522 问题）
   const startSubQuiz = () => {
     if (!teach || teach.curIdx < 0) return;
     const t = teach;
     startQuestion(
-      () => drill.start(t.conceptId, t.subPoints[t.curIdx]),
+      () => new Promise<QuestionView>((resolve, reject) => {
+        const fail = (status: number | undefined, msg?: string) =>
+          reject(new ApiError(status ?? 0, msg || '题目生成失败'));
+        const stream = drill.startStream(
+          t.conceptId, t.subPoints[t.curIdx],
+          (s) => setGenStatus(s),
+          (v) => resolve(v),
+          fail,
+        );
+        // 取消也要 settle Promise（复用 sseRef 的 cancel 钩子），否则 genLock 永不解锁
+        sseRef.current = {
+          cancel: () => {
+            stream.cancel();
+            fail(0, '已取消');
+          },
+        };
+      }),
       { kind: 'teach', conceptId: t.conceptId, subIndex: t.curIdx, planId: t.planId, taskId: t.taskId },
     );
   };
