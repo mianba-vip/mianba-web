@@ -15,6 +15,7 @@ import {
   Wrench,
   GraduationCap,
   History,
+  Hammer,
   Home,
   LogOut,
   MessagesSquare,
@@ -64,6 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: GraduationCap,
     items: [
       { to: '/plan', label: '学习计划', description: '规划你的学习路径', icon: Compass },
+      { to: '/forge', label: '图谱锻造', description: '一句话批产知识图谱', icon: Hammer },
       { to: '/drill', label: '练习', description: '针对性刷题训练', icon: PenLine },
       { to: '/profile', label: '掌握画像', description: '查看知识掌握程度', icon: Network },
       { to: '/history', label: '问答记录', description: '回顾练习与回答', icon: History },

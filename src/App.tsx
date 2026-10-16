@@ -18,6 +18,7 @@ const ReviewPage = lazy(() => import('./pages/Review').then((m) => ({ default: m
 const HistoryPage = lazy(() => import('./pages/History').then((m) => ({ default: m.HistoryPage })));
 const PlansPage = lazy(() => import('./pages/PlansPage').then((m) => ({ default: m.PlansPage })));
 const IntakeChat = lazy(() => import('./pages/IntakeChat').then((m) => ({ default: m.IntakeChat })));
+const ForgePage = lazy(() => import('./pages/ForgePage').then((m) => ({ default: m.ForgePage })));
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
 const CapturePage = lazy(() => import('./pages/CapturePage').then((m) => ({ default: m.CapturePage })));
 const ResumeManagement = lazy(() => import('./pages/ResumeManagement').then((m) => ({ default: m.ResumeManagement })));
@@ -89,6 +90,7 @@ export function App() {
       <Route path="/notes" element={<Guarded><Notes /></Guarded>} />
       <Route path="/notes/review/:runId" element={<Guarded><ReviewPage /></Guarded>} />
       <Route path="/plan" element={<Guarded><PlansPage /></Guarded>} />
+      <Route path="/forge" element={<Guarded><ForgePage /></Guarded>} />
       <Route path="/history" element={<Guarded><HistoryPage /></Guarded>} />
       <Route path="/knowledge-base" element={<Guarded><KnowledgeBasePage /></Guarded>} />
       <Route path="/knowledge-base/tools" element={<Guarded><KnowledgeToolsPage /></Guarded>} />
