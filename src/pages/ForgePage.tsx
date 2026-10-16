@@ -51,6 +51,10 @@ export function ForgePage() {
     setActiveId(id);
     setResult('');
     setErr('');
+    const stopPolling = () => {
+      if (pollRef.current) window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
     const poll = async () => {
       try {
         const v = await forge.get(id);
@@ -61,12 +65,16 @@ export function ForgePage() {
           setReportLine(r
             ? `${r.total} 个概念 · 批内去重 ${r.dropped_duplicate} · 与已有去重 ${r.dropped_existing}`
             : '');
-          if (pollRef.current) window.clearInterval(pollRef.current);
-          pollRef.current = null;
+          stopPolling();
         } else if (v.status === 'FAILED') {
           setErr(v.error || '锻造失败，请重试');
-          if (pollRef.current) window.clearInterval(pollRef.current);
-          pollRef.current = null;
+          stopPolling();
+          loadRuns();
+        } else if (v.status === 'APPROVED' || v.status === 'REJECTED') {
+          // 从记录点开一条已终态的 run：展示结果后即停轮询
+          setConcepts([]);
+          setReportLine('');
+          stopPolling();
           loadRuns();
         } else {
           setConcepts([]);
