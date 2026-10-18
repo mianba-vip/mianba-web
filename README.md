@@ -40,6 +40,12 @@ npm run build       # 桌面模式
 
 ## 部署
 
-网页模式产物 `dist/` 由后端仓库的 deploy 脚本（或你选择的方式）发布到 nginx：
-官网根目录 + `/app` SPA + `/api` 反代。拆分独立仓库后，后端仓库的 deploy 脚本
-需要改为拉取本仓库的构建产物（git clone / 制品下载均可）。
+前端部署到 `106.14.143.151:443`，后端与数据库保留在 `103.236.92.40`。
+新服务器的宿主机 Nginx 提供官网、`/app` 和 `/download`；`/api` 经加密 SSH 隧道转发给原后端。
+
+```bash
+bash deploy/deploy-web.sh
+```
+
+默认使用 `root@106.14.143.151:22`、`~/.ssh/id_ed25519` 和 `/opt/mianba-web`。
+首次准备、证书、域名/CDN 切换及回退步骤见 [部署说明](deploy/README.md)。

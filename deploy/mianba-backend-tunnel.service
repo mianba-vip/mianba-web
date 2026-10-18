@@ -1,0 +1,18 @@
+[Unit]
+Description=Mianba encrypted connection to backend
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -NT -i /etc/mianba-web/backend_ed25519 -p __BACKEND_SSH_PORT__ -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/mianba-web/backend_known_hosts -o ExitOnForwardFailure=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:23333:127.0.0.1:23333 __BACKEND_USER__@__BACKEND_HOST__
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
