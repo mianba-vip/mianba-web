@@ -16,14 +16,26 @@ SSE 关闭 Nginx 缓冲、缓存和压缩，读写超时为 3600 秒。上传限
 前端机须能出站连接后端 `103.236.92.40:37777`。
 
 将 `mianba.vip.pem`（完整证书链）和 `mianba.vip.key` 放到前端机 `/opt/mianba-web/certs/`。
-私钥权限为 600，证书不得提交到 Git。现有证书覆盖 `mianba.vip` 与 `www.mianba.vip`，有效期至 2027-01-14；到期前须续签并在两台入口机更新证书、重载 Nginx。
+私钥权限为 600，证书不得提交到 Git。
+
+**证书推荐直接走自动签发（见下），替代手动放置的 TrustAsia 证书**：现有 TrustAsia 证书的链终止于
+`TrustAsia TLS RSA Root CA`，该根仅 Chrome/Chromium 系收录，Apple（Safari/iOS）、Microsoft（Windows）、
+Mozilla（Firefox）均未收录（Cloudflare Radar / Chrome Root Store 可查证）——EdgeOne 还在前时用户看到的是
+EdgeOne 边缘证书所以未暴露；一旦直连新源站，这些浏览器会报证书错误。
 
 在本地 Git Bash / Linux 执行：
 
 ```bash
 bash deploy/setup-backend-tunnel.sh
+DP_ID=<DNSPod数字ID> DP_KEY=<DNSPod API Token> bash deploy/setup-cert.sh
 bash deploy/deploy-web.sh
 ```
+
+`setup-cert.sh` 在前端机安装 acme.sh 并用 DNS-01 签发 Let's Encrypt 证书（`mianba.vip` + `www.mianba.vip`，
+ISRG Root X1 链全平台受信），安装到 `/opt/mianba-web/certs/`（旧证书自动备份为 `*.bak-*`），续期由 acme.sh
+自带的 cron 自动完成并重载 Nginx。DNS-01 只动 DNSPod 解析、不碰服务器，接入备案通过前即可签发。
+DNSPod API 密钥在 console.dnspod.cn → 账号中心 → API 密钥 创建；acme.sh 会把密钥存在前端机
+`~/.acme.sh/account.conf` 供续期使用。`deploy-remote.sh` 现要求证书剩余有效期 ≥ 7 天，否则发布失败提醒续期。
 
 隧道私钥在前端机 `/etc/mianba-web/backend_ed25519` 生成，后端只加入专用受限公钥。
 后端主机密钥通过已认证的管理连接读取并固定，隧道不跳过 SSH 主机身份校验。
@@ -39,7 +51,7 @@ bash deploy/deploy-web.sh --skip-build
 
 可配置 `SSH_HOST`、`SSH_PORT`、`SSH_USER`、`SSH_KEY`、`DEPLOY_DIR` 和 `OFFICIAL_SITE_DIR`。
 最终公网验收默认经过现有域名入口；设置 `CHECK_DIRECT_ORIGIN=true` 可强制绕过 DNS/CDN，直接验证新 IP 的域名 HTTPS。
-官网源码默认读取相邻的 `../interview-homegrown/official-site`，包含 `/download`。
+官网源码默认依次探测相邻的 `../interview-homegrown/official-site` 与 `../interview/official-site`，包含 `/download`。
 官网源码缺失时沿用服务器当前官网和下载文件；首次部署必须提供官网源码。
 单独更新 APK 时，将文件放入上述官网源码的 `download/`，再执行前端发布。
 后端仍使用它自己的 `deploy/deploy-local.sh`，该脚本不再上传前端或重建旧 Web 容器。
@@ -62,7 +74,10 @@ EdgeOne 实际回源旧服务器 `18080` 的 Web 容器。容器过渡入口配�
 
 切换后按需刷新 EdgeOne 的 `/` 和 `/app/` HTML 缓存。443 证书用于域名，访问裸 IP 不会通过域名证书校验。
 本次迁移没有修改 DNS 或 EdgeOne 控制台配置；旧回源入口已经转发到新机。若普通 `/app/` 仍命中旧 HTML，刷新 EdgeOne 对应缓存即可；带新版本参数的 URL 可直接验证本次构建。
-2026-10-18 复核时，新机公网 443 携带 `mianba.vip` / `www.mianba.vip` 的 SNI 会被重置，但不携带 SNI 时证书链及域名验证成功，服务器本机 HTTPS 也正常。用户已确认完成备案/接入，DNS、EdgeOne 回源及云平台入口状态由用户继续核查；没有据此判定为备案问题。
+2026-10-18 复核时，新机公网 443 携带 `mianba.vip` / `www.mianba.vip` 的 SNI 会被重置，但不携带 SNI 时证书链及域名验证成功，服务器本机 HTTPS 也正常。
+**根因已确认（2026-10-19）：备案的接入商是腾讯云（域名在腾讯云购买、备案经腾讯云提交），阿里云名下无此域名的接入记录，故被阿里云拦截。解决办法是在阿里云做「接入备案」（主体/域名/备案号不变，仅补接入记录），审核期间零停机。**
+
+**切换流程、等待期准备清单与回退路径见 [CUTOVER.md](CUTOVER.md)。**
 旧机两个过渡入口暂使用 `proxy_ssl_server_name off`，同时保留 `proxy_ssl_verify on` 和 `proxy_ssl_name mianba.vip`，仍验证新机证书链与域名。新机须继续将该证书用作默认 443 站点；公网域名握手恢复后可将回源 SNI 恢复为 on。
 公网域名握手问题排除后，可不修改本地 DNS 验证新站：
 

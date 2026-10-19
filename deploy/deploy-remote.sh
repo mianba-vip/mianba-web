@@ -34,7 +34,7 @@ trap rollback ERR
 test -s "$STAGE/index.html"
 test -s "$STAGE/app/index.html"
 test -s "$STAGE/app/$EXPECTED_JS"
-openssl x509 -in "$DEPLOY_DIR/certs/mianba.vip.pem" -noout -checkend 86400
+openssl x509 -in "$DEPLOY_DIR/certs/mianba.vip.pem" -noout -checkend 604800
 systemctl is-active --quiet mianba-backend-tunnel
 curl -fsS --max-time 15 http://127.0.0.1:23333/healthz >/dev/null
 chmod -R a+rX "$STAGE"

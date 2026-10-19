@@ -13,7 +13,13 @@ case "${1:-}" in
   *) echo "用法：bash deploy/deploy-web.sh [--skip-build]" >&2; exit 1 ;;
 esac
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/mianba-web}"
-OFFICIAL_SITE_DIR="${OFFICIAL_SITE_DIR:-$ROOT/../interview-homegrown/official-site}"
+# 官网源码目录：显式指定优先；否则依次探测两种相邻仓库目录名
+# （部署机 WSL 为 interview-homegrown，Mac 工作区为 interview），都找不到时置空并在后文提示。
+if [[ -z "${OFFICIAL_SITE_DIR:-}" ]]; then
+  for _cand in "$ROOT/../interview-homegrown/official-site" "$ROOT/../interview/official-site"; do
+    if [[ -f "$_cand/index.html" ]]; then OFFICIAL_SITE_DIR="$_cand"; break; fi
+  done
+fi
 [[ "$DEPLOY_DIR" =~ ^/[A-Za-z0-9._/-]+$ && "$DEPLOY_DIR" != / &&
    ! "$DEPLOY_DIR" =~ (^|/)\.\.(/|$) ]] || { echo 'DEPLOY_DIR 必须是安全的绝对路径' >&2; exit 1; }
 echo "==> 预检前端机 $REMOTE:$SSH_PORT"
@@ -36,8 +42,11 @@ echo "==> 上传至 $STAGE"
   mkdir '$STAGE';
   if [ -L '$DEPLOY_DIR/current' ]; then cp -a '$DEPLOY_DIR/current/.' '$STAGE/'; fi;
   mkdir -p '$STAGE/app'"
-if [[ -f "$OFFICIAL_SITE_DIR/index.html" ]]; then
+if [[ -n "${OFFICIAL_SITE_DIR:-}" && -f "$OFFICIAL_SITE_DIR/index.html" ]]; then
+  echo "==> 官网源码：$OFFICIAL_SITE_DIR"
   tar -C "$OFFICIAL_SITE_DIR" -czf - . | "${SSH[@]}" "$REMOTE" "tar -xzf - -C '$STAGE'"
+else
+  echo '==> 未找到官网源码：本次沿用服务器当前官网与 /download 文件' >&2
 fi
 tar -C "$ROOT/dist" -czf - . | "${SSH[@]}" "$REMOTE" "tar -xzf - -C '$STAGE/app'"
 tar -C "$ROOT/deploy" -czf - nginx.conf deploy-remote.sh | \
