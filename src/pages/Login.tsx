@@ -319,7 +319,7 @@ export function Login() {
             <p className="auth-form-note"><ShieldCheck size={14} strokeWidth={1.6} aria-hidden="true" />你的每一步进步，都值得被认真记录</p>
           </div>
 
-          <footer className="auth-panel-footer"><span>AI 陪练</span><span>系统学习</span><span>面试复盘</span></footer>
+          <footer className="auth-panel-footer"><span>AI 陪练</span><span>系统学习</span><span>面试复盘</span><span><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">鲁ICP备2026051950号</a></span></footer>
         </section>
       </div>
       {showCaptcha && (
