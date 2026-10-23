@@ -440,7 +440,7 @@ export function Dashboard() {
               <strong>{activePlan?.title || (data.plans === null ? '暂未读取' : '尚未创建学习方向')}</strong>
             )}
           </div>
-          <Link to="/intake">
+          <Link to="/forge?new=1">
             <Plus size={14} />
             新建方向
           </Link>

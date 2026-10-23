@@ -62,9 +62,10 @@ CURL_ROUTE=()
 if [[ "${CHECK_DIRECT_ORIGIN:-false}" == true ]]; then
   CURL_ROUTE+=(--resolve "mianba.vip:443:$SSH_HOST")
 fi
-"$CURL_BIN" "${CURL_TLS[@]}" "${CURL_ROUTE[@]}" -fsS --max-time 20 \
+# ${arr[@]+...} 守卫：macOS 自带 bash 3.2 在 set -u 下展开空数组会误报 unbound variable
+"$CURL_BIN" ${CURL_TLS[@]+"${CURL_TLS[@]}"} ${CURL_ROUTE[@]+"${CURL_ROUTE[@]}"} -fsS --max-time 20 \
   https://mianba.vip/actuator/health
-"$CURL_BIN" "${CURL_TLS[@]}" "${CURL_ROUTE[@]}" -fsS --max-time 20 \
+"$CURL_BIN" ${CURL_TLS[@]+"${CURL_TLS[@]}"} ${CURL_ROUTE[@]+"${CURL_ROUTE[@]}"} -fsS --max-time 20 \
   "https://mianba.vip/app/?release=$RELEASE_ID" | grep -F "$LOCAL_JS" >/dev/null
 echo
 echo "DEPLOY_OK: https://mianba.vip/app/ → 前端源站 $SSH_HOST"

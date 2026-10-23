@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import logo from '../logo.png';
+import { forge } from '../api/forge';
 import {
   BrainCircuit,
   BriefcaseBusiness,
@@ -128,12 +129,14 @@ function NavItemLink({
   item,
   pathname,
   pendingReview,
+  forgeReview = 0,
   nested = false,
   compact = false,
 }: {
   item: NavItem;
   pathname: string;
   pendingReview: number;
+  forgeReview?: number;
   nested?: boolean;
   compact?: boolean;
 }) {
@@ -160,6 +163,10 @@ function NavItemLink({
         <span className="nav-review-badge" title={`有 ${pendingReview} 项复习任务待完成`}>
           {pendingReview}
         </span>
+      ) : item.to === '/forge' && forgeReview > 0 ? (
+        <span className="nav-review-badge" title={`有 ${forgeReview} 次锻造提案待审核`}>
+          {forgeReview}
+        </span>
       ) : active && item.to !== '/capture' ? (
         <ChevronRight className="nav-active-arrow" size={16} strokeWidth={1.9} aria-hidden />
       ) : null}
@@ -171,6 +178,7 @@ function NavGroupBlock({
   group,
   pathname,
   pendingReview,
+  forgeReview = 0,
   expanded,
   onToggle,
   compact = false,
@@ -178,6 +186,7 @@ function NavGroupBlock({
   group: NavGroup;
   pathname: string;
   pendingReview: number;
+  forgeReview?: number;
   expanded: boolean;
   onToggle: () => void;
   compact?: boolean;
@@ -308,7 +317,7 @@ function NavGroupBlock({
               {group.label}
             </div>
             {group.items.map((item) => (
-              <NavItemLink key={item.to} item={item} pathname={pathname} pendingReview={pendingReview} />
+              <NavItemLink key={item.to} item={item} pathname={pathname} pendingReview={pendingReview} forgeReview={forgeReview} />
             ))}
           </div>,
           document.body,
@@ -325,6 +334,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pendingReview = (dashboardData.today ?? []).filter(
     (task) => task.kind === 'REVIEW' && task.status !== 'DONE' && task.status !== 'SKIPPED',
   ).length;
+  // 待审核锻造数:「图谱锻造」角标(45s 轻量轮询;失败静默,不打扰导航)
+  const [forgeReview, setForgeReview] = useState(0);
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    const check = () => forge.list()
+      .then((rs) => { if (alive) setForgeReview(rs.filter((r) => r.status === 'AWAITING_REVIEW').length); })
+      .catch(() => { /* 未登录或请求失败:不显示角标 */ });
+    check();
+    const timer = window.setInterval(check, 45000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [userId]);
   const [showCasualNote, setShowCasualNote] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const guestUsername = useMemo(() => fallbackUsername(userId), [userId]);
@@ -433,6 +454,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               group={group}
               pathname={location.pathname}
               pendingReview={pendingReview}
+              forgeReview={forgeReview}
               expanded={expandedGroups.has(group.id)}
               onToggle={() => toggleGroup(group.id)}
               compact={collapsed}
@@ -456,6 +478,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               group={KNOWLEDGE_GROUP}
               pathname={location.pathname}
               pendingReview={pendingReview}
+              forgeReview={forgeReview}
               expanded={expandedGroups.has(KNOWLEDGE_GROUP.id)}
               onToggle={() => toggleGroup(KNOWLEDGE_GROUP.id)}
               compact={collapsed}

@@ -455,3 +455,52 @@
   font-size: 0.875rem;
   background: var(--paper-2);
 }
+
+/* ====== 锻造状态条(多链路入口) ====== */
+.forge-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  padding: 10px 14px;
+}
+.forge-strip-text { flex: 1; font-size: 13px; min-width: 200px; }
+.forge-strip-text em { font-style: normal; font-weight: 600; }
+
+/* ====== 知识矩阵总览(主题 × 层级) ====== */
+.concept-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(128, 128, 128, .22);
+  border-radius: 8px;
+  font-size: 12px;
+  overflow-x: auto;
+}
+.cm-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.6fr) repeat(6, minmax(36px, 1fr));
+  gap: 3px;
+  align-items: stretch;
+}
+.cm-head { color: rgba(128, 128, 128, .9); font-weight: 500; }
+.cm-topic {
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  align-self: center;
+  font-weight: 500;
+}
+.cm-cell {
+  text-align: center;
+  border-radius: 4px;
+  padding: 3px 0;
+  align-self: center;
+}
+.cm-head .cm-cell { font-weight: 500; }
+.cm-sum { font-weight: 600; }

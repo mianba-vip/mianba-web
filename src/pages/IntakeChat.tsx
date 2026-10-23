@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CorpusPicker } from '../components/CorpusPicker';
 import { libraryApi } from '../api/library';
 import { Send, Check, Upload, X } from 'lucide-react';
@@ -251,6 +251,18 @@ export function IntakeChat() {
         <h1>聊聊你想学什么</h1>
         <p>告诉我方向、你的基础和目标，我会帮你拆成一份层级学习规划。</p>
       </header>
+
+      {/* 旧版链路标示：后端已 @Deprecated,前端保留入口但引导到锻造 */}
+      <div className="intake-deprecated" role="note"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          padding: '10px 14px', marginBottom: 14,
+          border: '1px dashed rgba(209,162,74,.55)', borderRadius: 8,
+          fontSize: 13,
+        }}>
+        <span>旧版对话式建方向（保留兼容，后端已标废弃）。推荐用新的「图谱锻造」：一句话批产概念树，可审核、可编辑、带子知识点。</span>
+        <Link to="/forge" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>前往图谱锻造 →</Link>
+      </div>
 
       <Card className="upload-card">
         <span className="eyebrow">基于自己的资料学习（可选）</span>

@@ -33,6 +33,8 @@ export interface ForgeRunView {
 
 export interface ForgeRunSummary {
   id: number;
+  /** 锻造目标方向;null = 全局概念池 */
+  planId: number | null;
   topic: string;
   status: ForgeStatus;
   conceptCount: number;

@@ -647,6 +647,13 @@ export const drill = {
 export const studyPlan = {
   list: () => apiFetch<PlanView[]>('/study-plan'),
 
+  // 新建空方向（锻造优先流程）：先建方向壳，再去 /forge 批产概念
+  create: (title: string, goal?: string) =>
+    apiFetch<PlanView>('/study-plan', {
+      method: 'POST',
+      body: JSON.stringify({ title, goal }),
+    }),
+
   // corpusId 可选：用户先上传资料，再基于它对话规划
   intake: (messages: PlanChatMessage[], corpusId?: number) =>
     apiFetch<IntakeResponse>('/study-plan/intake', {

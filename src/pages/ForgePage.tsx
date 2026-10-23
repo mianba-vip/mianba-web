@@ -1,9 +1,11 @@
 // 图谱锻造页：一句方向 → 后台批产概念树 → 人工审核（增删改/调层）→ 批准落库。
 // 用户角色是「编辑者」：判断 AI 铺好的图要不要，而不是自己想出缺什么。
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Hammer, Play, Check, X, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { Button, Card, Tag } from '../components/ui';
 import { forge, type ForgeConceptProposal, type ForgeRunSummary } from '../api/forge';
+import { studyPlan } from '../api/drill';
 import { getStoredUserId } from '../api/client';
 import { useDashboardData, PLANS_ONLY } from '../lib/useDashboardData';
 import type { PlanView } from '../api/types';
@@ -21,12 +23,22 @@ export function ForgePage() {
   const [userId] = useState(() => getStoredUserId());
   const { data } = useDashboardData(userId, PLANS_ONLY);
   const plans: PlanView[] = data?.plans ?? [];
+  const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState('');
   const [goal, setGoal] = useState('');
-  const [planId, setPlanId] = useState<number | undefined>(undefined);
+  // 锻造目标:'' 全局池 / 'new' 新建方向 / 已有方向 id 字符串
+  const [planSel, setPlanSel] = useState<string>(() => {
+    const q = searchParams.get('planId');
+    if (q && Number(q) > 0) return q;
+    return searchParams.get('new') === '1' ? 'new' : '';
+  });
+  const [planTitle, setPlanTitle] = useState('');   // planSel === 'new' 时的方向名
+  const planId = planSel && planSel !== 'new' ? Number(planSel) : undefined;
   const [budget, setBudget] = useState(50);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // 锻造记录按方向筛选:'' 全部 / 'global' 全局池 / 方向 id
+  const [filterSel, setFilterSel] = useState('');
 
   const [runs, setRuns] = useState<ForgeRunSummary[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -42,7 +54,11 @@ export function ForgePage() {
 
   useEffect(() => {
     loadRuns();
+    // 从方向页/角标跳转进来时自动打开指定 run(如 ?run=42 待审核跳转)
+    const runId = Number(searchParams.get('run'));
+    if (Number.isSafeInteger(runId) && runId > 0) openRun(runId);
     return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadRuns]);
 
   // 轮询当前 run 直到终态/待审核
@@ -91,7 +107,17 @@ export function ForgePage() {
     setBusy(true);
     setErr('');
     try {
-      const { id } = await forge.create({ planId, topic: topic.trim(), goal: goal.trim() || undefined, layerBudget: budget });
+      // 「＋ 新建方向」:先建方向壳,再把锻造目标指到它;后续追加锻造沿用该方向
+      let targetPlanId = planId;
+      if (planSel === 'new') {
+        const title = (planTitle.trim() || topic.split(/[,，;；。]/)[0].trim()).slice(0, 30);
+        if (!title) { setErr('请填写新方向名（或从下拉选择已有方向）'); setBusy(false); return; }
+        const plan = await studyPlan.create(title, goal.trim() || undefined);
+        targetPlanId = plan.id;
+        setPlanSel(String(plan.id));
+        setPlanTitle('');
+      }
+      const { id } = await forge.create({ planId: targetPlanId, topic: topic.trim(), goal: goal.trim() || undefined, layerBudget: budget });
       setTopic(''); setGoal('');
       loadRuns();
       openRun(id);
@@ -141,6 +167,9 @@ export function ForgePage() {
     setConcepts((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...p } : c)));
 
   const keptCount = concepts.filter((c) => !c._dropped).length;
+  const shownRuns = filterSel === '' ? runs
+    : filterSel === 'global' ? runs.filter((r) => r.planId == null)
+    : runs.filter((r) => String(r.planId) === filterSel);
 
   return (
     <div className="forge-page">
@@ -158,10 +187,16 @@ export function ForgePage() {
           />
           <input className="forge-goal" placeholder="目标（可选），如：三周后面试"
             value={goal} onChange={(e) => setGoal(e.target.value)} />
-          <select value={planId ?? ''} onChange={(e) => setPlanId(e.target.value ? Number(e.target.value) : undefined)}>
+          <select value={planSel} onChange={(e) => setPlanSel(e.target.value)}>
             <option value="">锻造到全局概念池</option>
-            {plans.map((p) => <option key={p.id} value={p.id}>锻造进「{p.title}」</option>)}
+            <option value="new">＋ 新建方向…</option>
+            {plans.map((p) => <option key={p.id} value={String(p.id)}>锻造进「{p.title}」</option>)}
           </select>
+          {planSel === 'new' && (
+            <input
+              className="forge-plan-title" placeholder="新方向名（可留空，取方向首段），如：JVM 调优"
+              value={planTitle} onChange={(e) => setPlanTitle(e.target.value)} />
+          )}
           <select value={budget} onChange={(e) => setBudget(Number(e.target.value))}>
             <option value={30}>轻量 30 个概念</option>
             <option value={50}>标准 50 个概念</option>
@@ -174,16 +209,29 @@ export function ForgePage() {
 
       {runs.length > 0 && (
         <Card className="forge-runs">
-          <div className="forge-runs-title">锻造记录</div>
+          <div className="forge-runs-title">
+            锻造记录
+            <select className="forge-filter" value={filterSel} onChange={(e) => setFilterSel(e.target.value)}>
+              <option value="">全部</option>
+              <option value="global">全局概念池</option>
+              {plans.map((p) => <option key={p.id} value={String(p.id)}>{p.title}</option>)}
+            </select>
+          </div>
           <div className="forge-runs-list">
-            {runs.map((r) => (
-              <button key={r.id} className={`forge-run-item${activeId === r.id ? ' active' : ''}`}
-                onClick={() => openRun(r.id)}>
-                <span className="forge-run-topic">{r.topic}</span>
-                <Tag>{STATUS_LABEL[r.status] ?? r.status}</Tag>
-                {r.conceptCount > 0 && <span className="forge-run-count">{r.conceptCount} 概念</span>}
-              </button>
-            ))}
+            {shownRuns.length === 0 ? (
+              <div className="forge-run-empty">该筛选下暂无锻造记录</div>
+            ) : shownRuns.map((r) => {
+              const plan = r.planId != null ? plans.find((p) => p.id === r.planId) : undefined;
+              return (
+                <button key={r.id} className={`forge-run-item${activeId === r.id ? ' active' : ''}`}
+                  onClick={() => openRun(r.id)}>
+                  <span className="forge-run-topic">{r.topic}</span>
+                  {plan && <span className="forge-run-plan">{plan.title}</span>}
+                  <Tag>{STATUS_LABEL[r.status] ?? r.status}</Tag>
+                  {r.conceptCount > 0 && <span className="forge-run-count">{r.conceptCount} 概念</span>}
+                </button>
+              );
+            })}
           </div>
         </Card>
       )}

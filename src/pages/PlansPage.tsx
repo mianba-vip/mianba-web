@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus,
   Play,
   RefreshCw,
   BookOpen,
+  Hammer,
   Layers,
   ChevronRight,
   Pencil,
@@ -14,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { studyPlan } from '../api/drill';
+import { forge, type ForgeRunSummary } from '../api/forge';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Button, Card, Loading } from '../components/ui';
@@ -24,6 +26,98 @@ import './PlansPage.css';
 
 function msg(e: unknown): string {
   return e instanceof ApiError ? e.message : '加载失败';
+}
+
+/** 锻造状态条：该方向最近一次锻造 run 的状态 + 再次锻造入口（多链路可视化的一环）。 */
+function ForgeStrip({ planId }: { planId: number }) {
+  const navigate = useNavigate();
+  const [latest, setLatest] = useState<ForgeRunSummary | null>(null);
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    forge.list().then((rs) => {
+      if (!alive) return;
+      const mine = rs.filter((r) => r.planId === planId);
+      setTotal(mine.length);
+      setLatest(mine[0] ?? null);   // 后端按 id 倒序,首个即最近
+    }).catch(() => { /* 列表失败不阻塞页面 */ });
+    return () => { alive = false; };
+  }, [planId]);
+
+  if (!latest) {
+    return (
+      <Card className="forge-strip">
+        <span className="forge-strip-text">这个方向还没有锻造过——用一句话给知识矩阵铺底。</span>
+        <Button variant="ghost" onClick={() => navigate(`/forge?planId=${planId}`)}>
+          <Hammer size={15} strokeWidth={1.8} /> 发起锻造
+        </Button>
+      </Card>
+    );
+  }
+  const s = latest.status;
+  const text =
+    s === 'PENDING' || s === 'RUNNING'
+      ? <>最近锻造：<em>进行中</em>，可以离开，回来接着审{total > 1 ? `（累计 ${total} 次）` : ''}</>
+      : s === 'AWAITING_REVIEW'
+        ? <>最近锻造：<em>提案待审核</em>——等你拍板{total > 1 ? `（累计 ${total} 次）` : ''}</>
+        : s === 'FAILED'
+          ? <>最近锻造：<em>失败</em>{total > 1 ? `（累计 ${total} 次）` : ''}</>
+          : s === 'APPROVED'
+            ? <>最近锻造：<em>已批准</em>·写入 {latest.conceptCount} 个概念{total > 1 ? `·累计 ${total} 次` : ''}</>
+            : <>最近锻造：<em>已拒绝</em>{total > 1 ? `·累计 ${total} 次` : ''}</>;
+  return (
+    <Card className="forge-strip">
+      <span className="forge-strip-text">{text}</span>
+      {s === 'AWAITING_REVIEW' || s === 'FAILED' || s === 'PENDING' || s === 'RUNNING' ? (
+        <Button variant="ghost" onClick={() => navigate(`/forge?run=${latest.id}`)}>
+          {s === 'AWAITING_REVIEW' ? '去审核' : s === 'FAILED' ? '查看/重试' : '查看进度'}
+        </Button>
+      ) : (
+        <Button variant="ghost" title="会带上该方向已有概念自动去重，只补增量" onClick={() => navigate(`/forge?planId=${planId}`)}>
+          <Hammer size={15} strokeWidth={1.8} /> 再次锻造
+        </Button>
+      )}
+    </Card>
+  );
+}
+
+/** 知识矩阵总览：主题 × 认知层。格子数字 = 该主题该层的概念数，颜色按层着色。 */
+const CM_LAYERS = ['L1', 'L2', 'L3', 'L4', 'L5'];
+const CM_LAYER_BG: Record<number, string> = {
+  1: 'rgba(125,149,173,.30)', 2: 'rgba(165,160,107,.30)', 3: 'rgba(209,162,74,.32)',
+  4: 'rgba(224,118,47,.32)', 5: 'rgba(207,74,58,.32)',
+};
+function ConceptMatrixCard({ concepts }: { concepts: PlanConceptView[] }) {
+  const topicOf = (c: PlanConceptView) => c.topic || '未分组';
+  const topics = Array.from(new Set(concepts.map(topicOf)));
+  const cell = (t: string, l: number) => concepts.filter((c) => topicOf(c) === t && c.layer === l);
+  const done = (cs: PlanConceptView[]) =>
+    cs.filter((c) => c.subPoints.length > 0 && c.completedSubPoints.length === c.subPoints.length).length;
+  return (
+    <div className="concept-matrix" role="table" aria-label="知识矩阵总览（主题 × 认知层）">
+      <div className="cm-row cm-head" role="row">
+        <span className="cm-topic">主题 ╲ 层级</span>
+        {CM_LAYERS.map((l) => <span key={l} className="cm-cell" role="columnheader">{l}</span>)}
+        <span className="cm-cell" role="columnheader">计</span>
+      </div>
+      {topics.map((t) => (
+        <div className="cm-row" key={t} role="row">
+          <span className="cm-topic" title={t}>{t}</span>
+          {[1, 2, 3, 4, 5].map((l) => {
+            const cs = cell(t, l);
+            return (
+              <span key={l} className="cm-cell" role="cell"
+                style={cs.length ? { background: CM_LAYER_BG[l] } : undefined}
+                title={`${t} · L${l}：${cs.length} 个概念，${done(cs)} 个子项达标`}>
+                {cs.length || '·'}
+              </span>
+            );
+          })}
+          <span className="cm-cell cm-sum" role="cell">{concepts.filter((c) => topicOf(c) === t).length}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** 按 layer 分组概念 */
@@ -249,6 +343,9 @@ export function PlansPage() {
                 </div>
               </Card>
 
+              {/* ====== 锻造状态条：多链路入口（最近一次 run 的状态 + 再次锻造） ====== */}
+              <ForgeStrip planId={activePlan.id} />
+
               {editing ? (
                 /* ====== 编辑模式：改方向 + 增改删知识点 ====== */
                 <>
@@ -310,6 +407,8 @@ export function PlansPage() {
                   </div>
                 ) : (
                   <div className="concept-tree">
+                    {/* 矩阵总览在层级树之前：一眼看清主题 × 层级的覆盖与偏科 */}
+                    <ConceptMatrixCard concepts={activePlan.concepts} />
                     {Object.entries(groupByLayer(activePlan.concepts))
                       .sort(([a], [b]) => Number(a) - Number(b))
                       .map(([layer, concepts]) => {
