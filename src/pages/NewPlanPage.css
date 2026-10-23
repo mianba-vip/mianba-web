@@ -1,0 +1,187 @@
+/* ============================================================
+   新建方向 · 双通道选择页
+   科技感/动感的分寸：一次性入场动画 + 悬停光晕位移，
+   色彩严格走设计令牌（靛蓝主色 / 青绿辅色），不做常驻动效。
+   ============================================================ */
+
+.new-plan-page { max-width: 980px; }
+
+.np-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 26px;
+}
+@media (max-width: 860px) { .np-grid { grid-template-columns: 1fr; } }
+
+/* ---------- 卡片 ---------- */
+.np-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 30px 28px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+  animation: np-in .5s cubic-bezier(.2, .7, .3, 1) both;
+}
+.np-card-forge { animation-delay: .09s; }
+.np-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--cinnabar) 42%, var(--line));
+  box-shadow: 0 14px 34px -18px color-mix(in oklab, var(--cinnabar) 38%, transparent);
+}
+
+/* 顶部一线渐变光带（卡片的方向信号） */
+.np-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent,
+    color-mix(in oklab, var(--cinnabar) 75%, transparent),
+    color-mix(in oklab, var(--amber) 70%, transparent),
+    transparent);
+  opacity: .55;
+  transition: opacity .25s ease;
+}
+.np-card:hover::before { opacity: 1; }
+
+/* 角落辉光：默认收敛，悬停点亮 */
+.np-glow {
+  position: absolute;
+  top: -70px;
+  right: -60px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side,
+    color-mix(in oklab, var(--cinnabar) 26%, transparent),
+    transparent 72%);
+  opacity: .35;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.np-card:hover .np-glow { opacity: .75; transform: scale(1.08); }
+
+/* ---------- 图标 / 文案 ---------- */
+.np-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--cinnabar-wash);
+  color: var(--cinnabar);
+  border: 1px solid color-mix(in oklab, var(--cinnabar) 18%, transparent);
+}
+.np-card-forge .np-icon {
+  background: var(--amber-wash);
+  color: var(--amber);
+  border-color: color-mix(in oklab, var(--amber) 20%, transparent);
+}
+
+.np-card h2 {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.np-desc {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.75;
+  color: var(--ink-soft);
+  min-height: 3.4em;
+}
+.np-hint { margin: 0; font-size: var(--fs-xs); color: var(--ink-faint); }
+
+/* ---------- 文档快选 ---------- */
+.np-corpus { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.np-corpus button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease, background .2s ease;
+}
+.np-corpus button:hover { border-color: var(--cinnabar); color: var(--ink); background: var(--cinnabar-wash); }
+.np-corpus-name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-go { opacity: 0; transform: translateX(-4px); transition: opacity .2s ease, transform .2s ease; }
+.np-corpus button:hover .np-go { opacity: 1; transform: none; }
+
+/* ---------- 已有图谱快选 ---------- */
+.np-plans { display: flex; flex-direction: column; gap: 7px; }
+.np-plans-label { font-size: var(--fs-xs); color: var(--ink-faint); }
+.np-plan-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.np-plan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: border-color .2s ease, color .2s ease, background .2s ease;
+}
+.np-plan-chip em { font-style: normal; color: var(--ink-faint); }
+.np-plan-chip:hover { border-color: var(--amber); color: var(--ink); background: var(--amber-wash); }
+
+/* ---------- 主行动 ---------- */
+.np-actions { margin-top: auto; padding-top: 10px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.np-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--cinnabar);
+  background: transparent;
+  color: var(--cinnabar);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .2s ease, color .2s ease, transform .15s ease, box-shadow .2s ease;
+}
+.np-cta:hover { background: var(--cinnabar-wash); }
+.np-cta:active { transform: scale(.97); }
+.np-cta .lucide-arrow-right { transition: transform .2s ease; }
+.np-cta:hover .lucide-arrow-right { transform: translateX(3px); }
+
+.np-cta-primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--cinnabar), var(--cinnabar-deep));
+  color: var(--on-accent);
+  box-shadow: 0 10px 26px -12px color-mix(in oklab, var(--cinnabar) 60%, transparent);
+}
+.np-cta-primary:hover {
+  background: linear-gradient(135deg, var(--cinnabar-deep), var(--cinnabar-deep));
+  box-shadow: 0 12px 30px -10px color-mix(in oklab, var(--cinnabar) 70%, transparent);
+}
+
+.np-alt { font-size: var(--fs-xs); color: var(--ink-faint); text-decoration: none; }
+.np-alt:hover { color: var(--cinnabar); }
+
+/* ---------- 入场动画（一次性） ---------- */
+@keyframes np-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .np-card, .np-glow, .np-cta, .np-go { animation: none !important; transition: none !important; }
+}

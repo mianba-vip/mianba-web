@@ -18,6 +18,7 @@ const ReviewPage = lazy(() => import('./pages/Review').then((m) => ({ default: m
 const HistoryPage = lazy(() => import('./pages/History').then((m) => ({ default: m.HistoryPage })));
 const PlansPage = lazy(() => import('./pages/PlansPage').then((m) => ({ default: m.PlansPage })));
 const IntakeChat = lazy(() => import('./pages/IntakeChat').then((m) => ({ default: m.IntakeChat })));
+const NewPlanPage = lazy(() => import('./pages/NewPlanPage').then((m) => ({ default: m.NewPlanPage })));
 const ForgePage = lazy(() => import('./pages/ForgePage').then((m) => ({ default: m.ForgePage })));
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
 const CapturePage = lazy(() => import('./pages/CapturePage').then((m) => ({ default: m.CapturePage })));
@@ -81,6 +82,7 @@ export function App() {
       />
       {/* /drill/* 让 Drill 在子路由间保持挂载（视图由路径派生，支持前进/后退） */}
       <Route path="/drill/*" element={<Guarded><Drill /></Guarded>} />
+      <Route path="/new-plan" element={<Guarded><NewPlanPage /></Guarded>} />
       <Route path="/intake" element={<Guarded><IntakeChat /></Guarded>} />
       <Route path="/resumes" element={<Guarded><ResumeManagement /></Guarded>} />
       <Route path="/rehearsal" element={<Guarded><Interview /></Guarded>} />
